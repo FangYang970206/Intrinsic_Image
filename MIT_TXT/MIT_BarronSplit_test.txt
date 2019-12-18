@@ -1,0 +1,10 @@
+F:\revisit_IID\dataset\\MIT-input\\deer-1.png
+F:\revisit_IID\dataset\\MIT-input\\potato-1.png
+F:\revisit_IID\dataset\\MIT-input\\paper2-1.png
+F:\revisit_IID\dataset\\MIT-input\\cup2-1.png
+F:\revisit_IID\dataset\\MIT-input\\sun-1.png
+F:\revisit_IID\dataset\\MIT-input\\pear-1.png
+F:\revisit_IID\dataset\\MIT-input\\frog2-1.png
+F:\revisit_IID\dataset\\MIT-input\\turtle-1.png
+F:\revisit_IID\dataset\\MIT-input\\raccoon-1.png
+F:\revisit_IID\dataset\\MIT-input\\teabag1-1.png

@@ -1,0 +1,8 @@
+log*/
+MIT_logs/
+MPI_logs*/
+.vscode/
+__pycache__/
+*.bat
+IIW*/
+*.pth
