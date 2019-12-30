@@ -36,7 +36,18 @@ class MPI_Dataset_Revisit(Data.Dataset):
         input_image = Image.open(inp_path).convert('RGB')
         albedo_image = Image.open(albedo_path).convert('RGB')
         shading_image = Image.open(shading_path).convert('RGB')
-        mask = Image.open(mask_path).convert('RGB')
+        # mask = Image.open(mask_path).convert('RGB')
+
+        if self.transform:
+            if random.random() < 0.5:
+                input_image, albedo_image, shading_image = self.transform(input_image, albedo_image, shading_image)
+            else:
+                im_w, im_h = input_image.size[0], input_image.size[1]
+                start_x, start_y = random.randint(0, im_w-256), random.randint(0, im_h-256)
+                input_image = input_image.crop((start_x, start_y, start_x+256, start_y+256))
+                albedo_image = albedo_image.crop((start_x, start_y, start_x+256, start_y+256))
+                shading_image = shading_image.crop((start_x, start_y, start_x+256, start_y+256))
+        mask = np.repeat((np.array(albedo_image).mean(2) != 0).astype(np.uint8)[..., np.newaxis]*255, 3, 2)
 
         if self.refl_multi_size:
             albedo_frame1 = albedo_image.resize((self.image_size // 4, self.image_size // 4))
@@ -55,11 +66,7 @@ class MPI_Dataset_Revisit(Data.Dataset):
             return self.toTensor(input_image), self.toTensor(albedo_image), self.toTensor(shading_image), \
                    self.toTensor(mask), [self.toTensor(shading_frame1), self.toTensor(shading_frame2)]
         else:
-            if self.transform is not None:
-                # print("transform...")
-                return self.transform(input_image, albedo_image, shading_image, mask)
-            else:
-                return self.toTensor(input_image), self.toTensor(albedo_image), self.toTensor(shading_image), self.toTensor(mask)
+            return self.toTensor(input_image), self.toTensor(albedo_image), self.toTensor(shading_image), self.toTensor(mask)
     
     def __len__(self):
         return len(self.names)

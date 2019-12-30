@@ -125,7 +125,7 @@ class SELayerImproved(nn.Module):
 
 class SEDecomposerSingle(nn.Module):
 
-    def __init__(self, channels=[3, 32, 64, 128, 256, 512], kernel_size=3, padding=1, skip_se=False, low_se=False, se_improved=False, multi_size=False, image_size=256, se_squeeze=False, reduction=8, detach=False, bn=True, act="relu"):
+    def __init__(self, channels=[3, 32, 64, 128, 256], kernel_size=3, padding=1, skip_se=False, low_se=False, se_improved=False, multi_size=False, image_size=256, se_squeeze=False, reduction=8, detach=False, bn=True, act="relu"):
         super(SEDecomposerSingle, self).__init__()
 
         stride_fn = lambda ind: 1 if ind==0 else 2

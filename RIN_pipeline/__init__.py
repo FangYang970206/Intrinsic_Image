@@ -7,8 +7,8 @@ from .MIT_Dataset import MIT_Dataset
 from .MIT_Trainer import MIT_Trainer
 from .MPI_Dataset import MPI_Dataset
 from .MPI_Trainer import MPI_Trainer
-from .MPI_transform import MPI_Test_Agumentation, MPI_Train_Agumentation
-from .MPI_Tester import MPI_test, MPI_test_remove_shape, MPI_test_unet, MPI_test_unet_one, IIW_test_unet
+from .MPI_transform import MPI_Test_Agumentation, MPI_Train_Agumentation, MPI_Train_Agumentation_fy, MPI_Train_Agumentation_fy2
+from .MPI_Tester import MPI_test, MPI_test_remove_shape, MPI_test_unet, MPI_test_unet_one, IIW_test_unet, MIT_test_unet
 from .MPI_Trainer_Origin import MPI_TrainerOrigin
 from .ShapeNet_Dateset_new import ShapeNet_Dateset_new
 from .shapenet_SupervisionTrainer import ShapeNetSupervisionTrainer

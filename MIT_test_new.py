@@ -39,7 +39,7 @@ def main():
     parser.add_argument('--refl_reduction',     type=StrToInt,   default=8)
     parser.add_argument('--shad_reduction',     type=StrToInt,   default=8)
     parser.add_argument('--cuda',               type=str,       default='cuda')
-    parser.add_argument('--fullsize',           type=StrToBool, default=True)
+    parser.add_argument('--fullsize',           type=StrToBool, default=False)
     args = parser.parse_args()
 
     device = torch.device(args.cuda)
@@ -61,17 +61,14 @@ def main():
         tmp_inversepad = nn.ReflectionPad2d((0,-pad_w,0,-pad_h))
     else:
         print('test size256....')
-        MPI_Image_Split_test_txt = 'D:\\fangyang\\intrinsic_by_fangyang\\MPI_TXT\\MPI_main_imageSplit-256-test.txt'
-        MPI_Scene_Split_test_txt = 'D:\\fangyang\\intrinsic_by_fangyang\\MPI_TXT\\MPI_main_sceneSplit-256-test.txt'
+        MIT_test_txt = 'MIT_TXT\\MIT_BarronSplit_test.txt'
 
-    if args.split == 'ImageSplit':
+    if args.fullsize:
         test_txt = MPI_Image_Split_test_txt
-        print('Image split mode')
     else:
-        test_txt = MPI_Scene_Split_test_txt
-        print('Scene split mode')
+        test_txt = MIT_test_txt
 
-    test_set = RIN_pipeline.MPI_Dataset_Revisit(test_txt)
+    test_set = RIN_pipeline.MIT_Dataset_Revisit(test_txt, mode='test')
     test_loader = torch.utils.data.DataLoader(test_set, batch_size=1, num_workers=args.loader_threads, shuffle=False)
 
     if args.fullsize:
@@ -79,11 +76,13 @@ def main():
         check_folder(os.path.join(args.save_path, "refl_output_fullsize"))
         check_folder(os.path.join(args.save_path, "shad_target_fullsize"))
         check_folder(os.path.join(args.save_path, "shad_output_fullsize"))
+        check_folder(os.path.join(args.save_path, "mask"))
     else:
         check_folder(os.path.join(args.save_path, "refl_target"))
         check_folder(os.path.join(args.save_path, "shad_target"))
         check_folder(os.path.join(args.save_path, "refl_output"))
         check_folder(os.path.join(args.save_path, "shad_output"))
+        check_folder(os.path.join(args.save_path, "mask"))
 
     ToPIL = transforms.ToPILImage()
 
@@ -104,12 +103,8 @@ def main():
             if args.fullsize:
                 albedo_fake, shading_fake = tmp_inversepad(albedo_fake), tmp_inversepad(shading_fake)
 
-            albedo_fake  = albedo_fake*mask_g
-
-            # lab_refl_targ = albedo_g.squeeze().cpu().numpy().transpose(1,2,0)
-            # lab_sha_targ = shading_g.squeeze().cpu().numpy().transpose(1,2,0)
-            # refl_pred = albedo_fake.squeeze().cpu().numpy().transpose(1,2,0)
-            # sha_pred = shading_fake.squeeze().cpu().numpy().transpose(1,2,0)
+            albedo_fake  = albedo_fake * mask_g
+            shading_fake = shading_fake * mask_g
 
             albedo_fake = albedo_fake.cpu().clamp(0, 1)
             shading_fake = shading_fake.cpu().clamp(0, 1)
@@ -120,22 +115,13 @@ def main():
             lab_sha_targ = ToPIL(shading_g.squeeze())
             refl_pred = ToPIL(albedo_fake.squeeze())
             sha_pred = ToPIL(shading_fake.squeeze())
+            mask_g = ToPIL(mask_g.cpu().squeeze())
 
             lab_refl_targ.save(os.path.join(args.save_path, "refl_target_fullsize" if args.fullsize else "refl_target", "{}.png".format(ind)))
             lab_sha_targ.save(os.path.join(args.save_path, "shad_target_fullsize" if args.fullsize else "shad_target", "{}.png".format(ind)))
             refl_pred.save(os.path.join(args.save_path, "refl_output_fullsize" if args.fullsize else "refl_output", "{}.png".format(ind)))
             sha_pred.save(os.path.join(args.save_path, "shad_output_fullsize" if args.fullsize else "shad_output", "{}.png".format(ind)))
-
-            # lab_refl_targ = np.clip(lab_refl_targ, 0, 1)
-            # lab_sha_targ = np.clip(lab_sha_targ, 0, 1)
-            # refl_pred = np.clip(refl_pred, 0, 1)
-            # sha_pred = np.clip(sha_pred, 0, 1)
-
-            # scipy.misc.imsave(os.path.join(args.save_path, "refl_target_fullsize" if args.fullsize else "refl_target", "{}.png".format(ind)), lab_refl_targ)
-            # scipy.misc.imsave(os.path.join(args.save_path, "refl_output_fullsize" if args.fullsize else "refl_output", "{}.png".format(ind)), refl_pred)
-            # scipy.misc.imsave(os.path.join(args.save_path, "shad_target_fullsize" if args.fullsize else "shad_target", "{}.png".format(ind)), lab_sha_targ)
-            # scipy.misc.imsave(os.path.join(args.save_path, "shad_output_fullsize" if args.fullsize else "shad_output", "{}.png".format(ind)), sha_pred)
-
+            mask_g.save(os.path.join(args.save_path, "mask", "{}.png".format(ind)))
 
 if __name__ == "__main__":
     main()

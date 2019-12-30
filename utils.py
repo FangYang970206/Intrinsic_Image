@@ -23,3 +23,4 @@ def clc_pad(h,w,st=32):## default st--> 32
         else:
             return st-r
     return _f(h),_f(w)
+    

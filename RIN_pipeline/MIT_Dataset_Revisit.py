@@ -9,12 +9,15 @@ from torchvision.transforms import ToTensor
 
 
 class MIT_Dataset_Revisit(Data.Dataset):
-    def __init__(self, FileName, mode='train', sel=['reflectance', 'shading', 'mask'], transform = None):
+    def __init__(self, FileName, mode='train', sel=['reflectance', 'shading', 'mask'], transform = None, refl_multi_size=None, shad_multi_size=None, image_size=None):
         self.FileName = FileName
         self.toTensor = ToTensor()
         self.mode = mode
         self.sel = sel
         self.names = []
+        self.refl_multi_size = refl_multi_size
+        self.shad_multi_size = shad_multi_size
+        self.image_size = image_size
         with open(FileName) as f:
             for line in f.readlines():
                 self.names.append(line)
@@ -30,19 +33,31 @@ class MIT_Dataset_Revisit(Data.Dataset):
         shading_image = Image.open(shading_path).resize((256, 256)).convert('RGB')
         mask = Image.open(mask_path).resize((256, 256)).convert('RGB')
 
-        # if self.mode == 'train':
-        #     if random.random() < 0.5:
-        #         input_image = input_image.transpose(Image.FLIP_LEFT_RIGHT)
-        #         albedo_image = albedo_image.transpose(Image.FLIP_LEFT_RIGHT)
-        #         shading_image = shading_image.transpose(Image.FLIP_LEFT_RIGHT)
-        #         mask = mask.transpose(Image.FLIP_LEFT_RIGHT)
-        #     if random.random() < 0.5:
-        #         input_image = input_image.transpose(Image.FLIP_TOP_BOTTOM)
-        #         albedo_image = albedo_image.transpose(Image.FLIP_TOP_BOTTOM)
-        #         shading_image = shading_image.transpose(Image.FLIP_TOP_BOTTOM)
-        #         mask = mask.transpose(Image.FLIP_TOP_BOTTOM)
-
-        return self.toTensor(input_image), self.toTensor(albedo_image), self.toTensor(shading_image), self.toTensor(mask)
+        if self.mode == 'train':
+            if random.random() < 0.5:
+                input_image = input_image.transpose(Image.FLIP_LEFT_RIGHT)
+                albedo_image = albedo_image.transpose(Image.FLIP_LEFT_RIGHT)
+                shading_image = shading_image.transpose(Image.FLIP_LEFT_RIGHT)
+                mask = mask.transpose(Image.FLIP_LEFT_RIGHT)
+        
+        if self.refl_multi_size:
+            albedo_frame1 = albedo_image.resize((self.image_size // 4, self.image_size // 4))
+            albedo_frame2 = albedo_image.resize((self.image_size // 2, self.image_size // 2))
+        if self.shad_multi_size:
+            shading_frame1 = shading_image.resize((self.image_size // 4, self.image_size // 4))
+            shading_frame2 = shading_image.resize((self.image_size // 2, self.image_size // 2))
+        if self.refl_multi_size and self.shad_multi_size:
+            return self.toTensor(input_image), self.toTensor(albedo_image), self.toTensor(shading_image), \
+                   self.toTensor(mask), [self.toTensor(albedo_frame1), self.toTensor(albedo_frame2)], \
+                                        [self.toTensor(shading_frame1), self.toTensor(shading_frame2)]
+        if self.refl_multi_size:
+            return self.toTensor(input_image), self.toTensor(albedo_image), self.toTensor(shading_image), \
+                   self.toTensor(mask), [self.toTensor(albedo_frame1), self.toTensor(albedo_frame2)]
+        if self.shad_multi_size:
+            return self.toTensor(input_image), self.toTensor(albedo_image), self.toTensor(shading_image), \
+                   self.toTensor(mask), [self.toTensor(shading_frame1), self.toTensor(shading_frame2)]
+        else:
+            return self.toTensor(input_image), self.toTensor(albedo_image), self.toTensor(shading_image), self.toTensor(mask)
     
     def __len__(self):
         return len(self.names)

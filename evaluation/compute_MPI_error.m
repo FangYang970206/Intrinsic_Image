@@ -12,11 +12,15 @@ count = 0;
 % result_reflect_path = 'D:/fangyang/intrinsic_by_fangyang/logs_shapenet/RIN_CosBF_VGG0.1/refl_output/';
 % result_shading_path = 'D:/fangyang/intrinsic_by_fangyang/logs_shapenet/RIN_CosBF_VGG0.1/shad_output/';
 % mask_path = 'D:/fangyang/intrinsic_by_fangyang/logs_shapenet/RIN_CosBF_VGG0.1_updateLR/mask/'
-Dir = 'D:/fangyang/intrinsic_by_fangyang/logs/lihao/'
-reflect_path = [ Dir 'refl_target/'];
-shading_path = [ Dir 'shad_target/'];
-result_reflect_path = [ Dir 'refl_output/'];
-result_shading_path = [ Dir 'shad_output/'];
+Dir = 'D:/fangyang/intrinsic_by_fangyang/MPI_logs_new/GAN_RIID_updateLR3_epoch160_CosbfVGG_ImageSplit_refl-se-skip_shad-se-low_multi_new_shadSqueeze_256_EOK/'
+% reflect_path = [ Dir 'refl_target_fullsize/'];
+% shading_path = [ Dir 'shad_target_fullsize/'];
+% result_reflect_path = [ Dir 'refl_output_fullsize/'];
+% result_shading_path = [ Dir 'shad_output_fullsize/'];
+reflect_path = [ Dir 'refl_target_fullsize/'];
+shading_path = [ Dir 'shad_target_fullsize/'];
+result_reflect_path = [ Dir 'refl_output_fullsize/'];
+result_shading_path = [ Dir 'shad_output_fullsize/'];
 
 fileFolder = fullfile(reflect_path);
 dirOutput = dir(fullfile(fileFolder,'*.png'));
@@ -24,6 +28,7 @@ fileNames = {dirOutput.name}';
 
 % s = dir([inputDir '*-input.png']);
 for i = 1:length(fileNames)
+    
     im_reflect_path = strcat(reflect_path,fileNames(i));
     im_reflect_path = im_reflect_path{1};
     im_shading_path = strcat(shading_path,fileNames(i));
@@ -40,6 +45,8 @@ for i = 1:length(fileNames)
     labelAlbedoName = im_reflect_path;
     labelShadingName = im_shading_path;
 %     maskName = im_mask_path;
+    
+%     disp(sprintf('name: %s', albedoName));
 
     albedo = im2double(imread(albedoName));
     labelAlbedo = im2double(imread(labelAlbedoName));
@@ -55,13 +62,14 @@ for i = 1:length(fileNames)
     [height, width, channel] = size(albedo);
 
     totalMSEA = totalMSEA + evaluate_one_k(albedo,labelAlbedo);
+%     disp(sprintf('albedo: mse: %f', totalMSEA));
     totalLMSEA = totalLMSEA + levaluate_one_k(albedo,labelAlbedo);
     totalDSSIMA = totalDSSIMA + (1-evaluate_ssim_one_k_fast(albedo,labelAlbedo))/2;
 
     totalMSES = totalMSES + evaluate_one_k(shading,labelShading);
     totalLMSES = totalLMSES + levaluate_one_k(shading,labelShading);
     totalDSSIMS = totalDSSIMS + (1-evaluate_ssim_one_k_fast(shading,labelShading))/2;
-
+    
     count = count + 1;
     disp(count);
 end

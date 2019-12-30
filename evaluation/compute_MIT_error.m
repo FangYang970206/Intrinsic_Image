@@ -1,5 +1,5 @@
 clear all;
-Dir = 'D:\fangyang\intrinsic_by_fangyang\MIT_logs\RIID_origin_RIN_updateLR0.0005_4_bf_cosLoss_VGG0.1_400epochs_bs22\';
+Dir = 'D:\fangyang\intrinsic_by_fangyang\MIT_logs\GAN_RIID_updateLR3_epoch160_CosbfVGG_refl-se-skip_shad-se-low_multi_new_shadSqueeze_DA_256_MITError\';
 albedo_pred_dir = [Dir 'refl_output\'];
 albedo_targ_dir = [Dir 'refl_target\'];
 shading_pred_dir = [Dir 'shad_output\'];
@@ -22,7 +22,7 @@ for m =1:length(images)
     albedo_label = im2double(imread(albedoname_label));
     shading_label = im2double(imread(shadingname_label));
     mask = (imread(maskname_label));
-%     mask = mask(:, :, 1);
+    mask = mask(:, :, 1);
     V = mask > 0;
 
     V3 = repmat(V,[1,1,size(shading_label,3)]);  
@@ -35,9 +35,10 @@ for m =1:length(images)
     
     alpha_shading = sum(shading_label(V3) .* shading_predict(V3)) ./ max(eps, sum(shading_predict(V3) .* shading_predict(V3)));
     S = shading_predict * alpha_shading;
-
+%     tmp1 = albedo_label(V3) .* albedo_predict(V3);
     alpha_reflectance = sum(albedo_label(V3) .* albedo_predict(V3)) ./ max(eps, sum(albedo_predict(V3) .* albedo_predict(V3)));
     A = albedo_predict * alpha_reflectance;
+%     disp(sprintf('albedo: mse: %f', sum(sum(sum(A)))));
 
     mse_shading{m} =  mean((S(V3) - shading_label(V3)).^2);
     mse_albedo{m} =  mean((A(V3) - albedo_label(V3)).^2);
