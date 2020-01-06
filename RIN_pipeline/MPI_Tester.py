@@ -99,7 +99,6 @@ def evaluate_one_k(output, label):
     return error
 
 def MIT_error(output, label, mask):
-    output, label, mask = output.squeeze(), label.squeeze(), mask.squeeze()
     output, label = output * mask, label * mask
     alpha = torch.sum(output * label) / torch.max(torch.tensor([1e-8]), torch.sum(output * output))
     output = alpha * output
@@ -125,14 +124,14 @@ def MIT_test_unet(model, loader, device, args):
             else:
                 albedo_fake, shading_fake = model.forward(input_g)
 
-            # albedo_fake  = albedo_fake*mask_g
-            # shading_fake = shading_fake*mask_g
+            albedo_fake  = albedo_fake*mask_g
+            shading_fake = shading_fake*mask_g
 
-            albedo_fake = albedo_fake.cpu().clamp(0, 1)
-            shading_fake = shading_fake.cpu().clamp(0, 1)
-            albedo_g = albedo_g.cpu().clamp(0, 1)
-            shading_g = shading_g.cpu().clamp(0, 1)
-            mask_g = mask_g.cpu().clamp(0, 1)
+            albedo_fake = albedo_fake.cpu().clamp(0, 1).squeeze()
+            shading_fake = shading_fake.cpu().clamp(0, 1).squeeze()
+            albedo_g = albedo_g.cpu().clamp(0, 1).squeeze()
+            shading_g = shading_g.cpu().clamp(0, 1).squeeze()
+            mask_g = mask_g.cpu().clamp(0, 1).squeeze()
 
             A_mse += MIT_error(albedo_fake, albedo_g, mask_g).item()
             S_mse += MIT_error(shading_fake, shading_g, mask_g).item()

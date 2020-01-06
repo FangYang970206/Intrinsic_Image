@@ -125,7 +125,7 @@ class SELayerImproved(nn.Module):
 
 class SEDecomposerSingle(nn.Module):
 
-    def __init__(self, channels=[3, 32, 64, 128, 256], kernel_size=3, padding=1, skip_se=False, low_se=False, se_improved=False, multi_size=False, image_size=256, se_squeeze=False, reduction=8, detach=False, bn=True, act="relu"):
+    def __init__(self, channels=[3, 32, 64, 128, 256], kernel_size=3, padding=1, skip_se=False, low_se=False, se_improved=False, multi_size=False, image_size=256, se_squeeze=False, reduction=8, detach=False, bn=True, act="relu", last_conv_ch=3):
         super(SEDecomposerSingle, self).__init__()
 
         stride_fn = lambda ind: 1 if ind==0 else 2
@@ -140,6 +140,7 @@ class SEDecomposerSingle(nn.Module):
         self.reduction = reduction
         self.detach = detach
         self.bn = bn
+        self.last_conv_ch = last_conv_ch
         if not self.bn:
             print(" IN mode")
         else:
@@ -169,6 +170,7 @@ class SEDecomposerSingle(nn.Module):
         channels.append(channels[-1])
         ## reverse channel order for decoder
         channels = list(reversed(channels))
+        channels[-1] = self.last_conv_ch
         stride_fn = lambda ind: 1
         sys.stdout.write( '<Decomposer> Building Decoder' )
         
@@ -179,11 +181,11 @@ class SEDecomposerSingle(nn.Module):
             self.se_layer = SELayerImproved(channels[0]) if self.se_improved else SELayer(channels[0], act=self.act)
         if self.multi_size:
             if self.se_squeeze:
-                self.frame1 = nn.Conv2d(128 + 128 // self.reduction, 3, 3, 1, 1)
-                self.frame2 = nn.Conv2d(64 + 64 // self.reduction, 3, 3, 1, 1)
+                self.frame1 = nn.Conv2d(128 + 128 // self.reduction, self.last_conv_ch, 3, 1, 1)
+                self.frame2 = nn.Conv2d(64 + 64 // self.reduction, self.last_conv_ch, 3, 1, 1)
             else:
-                self.frame1 = nn.Conv2d(256, 3, 3, 1, 1)
-                self.frame2 = nn.Conv2d(128, 3, 3, 1, 1)
+                self.frame1 = nn.Conv2d(256, self.last_conv_ch, 3, 1, 1)
+                self.frame2 = nn.Conv2d(128, self.last_conv_ch, 3, 1, 1)
 
     def __decode(self, decoder, encoded, inp):
         x = inp
@@ -202,12 +204,20 @@ class SEDecomposerSingle(nn.Module):
             if self.multi_size:
                 if x.size()[-1] == self.image_size // 4 and x.size()[-2] == self.image_size // 4:
                     frame1 = self.frame1(x)
-                    frame_list.append(frame1)
+                    if self.last_conv_ch == 1:
+                        frame_list.append(frame1.repeat(1,3,1,1))
+                    else:
+                        frame_list.append(frame1)
                 if x.size()[-1] == self.image_size // 2 and x.size()[-2] == self.image_size // 2:
                     frame2 = self.frame2(x)
-                    frame_list.append(frame2)
-
+                    if self.last_conv_ch == 1:
+                        frame_list.append(frame2.repeat(1,3,1,1))
+                    else:
+                        frame_list.append(frame2)
+             
         x = decoder[-1](x)
+        if self.last_conv_ch == 1:
+            x = x.repeat(1,3,1,1)
         if self.multi_size:
             return x, frame_list
         else:

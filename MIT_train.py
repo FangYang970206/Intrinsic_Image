@@ -78,6 +78,7 @@ def main():
     parser.add_argument('--fullsize',           type=StrToBool,  default=False)
     parser.add_argument('--fullsize_test',      type=StrToBool,  default=False)
     parser.add_argument('--image_size',         type=StrToInt, default=256)
+    parser.add_argument('--shad_out_conv',      type=StrToInt, default=3)
     args = parser.parse_args()
 
     check_folder(args.save_path)
@@ -88,7 +89,7 @@ def main():
     # device = torch.device("cuda" if torch.cuda.is_available() else 'cpu')
     # pylint: disable=E1101
     reflectance = RIN.SEDecomposerSingle(multi_size=args.refl_multi_size, low_se=args.refl_low_se, skip_se=args.refl_skip_se, detach=args.refl_detach_flag, reduction=args.refl_reduction, bn=args.refl_bn, act=args.refl_act).to(device)
-    shading = RIN.SEDecomposerSingle(multi_size=args.shad_multi_size, low_se=args.shad_low_se, skip_se=args.shad_skip_se, se_squeeze=args.shad_squeeze_flag, reduction=args.shad_reduction, detach=args.shad_detach_flag, bn=args.shad_bn, act=args.shad_act).to(device)
+    shading = RIN.SEDecomposerSingle(multi_size=args.shad_multi_size, low_se=args.shad_low_se, skip_se=args.shad_skip_se, se_squeeze=args.shad_squeeze_flag, reduction=args.shad_reduction, detach=args.shad_detach_flag, bn=args.shad_bn, act=args.shad_act, last_conv_ch=1).to(device)
     cur_epoch = 0
     if args.checkpoint:
         reflectance.load_state_dict(torch.load(os.path.join(args.save_path, args.refl_checkpoint, args.state_dict_refl)))

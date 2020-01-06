@@ -52,6 +52,7 @@ for m =1:length(images)
     ave_mse_albedo = ave_mse_albedo + log(mse_albedo{m});
     ave_mse_shading = ave_mse_shading + log(mse_shading{m});
 end
-ave_lmse = exp(ave_lmse/length(images))
-ave_mse_albedo = exp(ave_mse_albedo/length(images))
-ave_mse_shading = exp(ave_mse_shading/length(images))
+ave_lmse = exp(ave_lmse/length(images));
+ave_mse_albedo = exp(ave_mse_albedo/length(images));
+ave_mse_shading = exp(ave_mse_shading/length(images));
+disp(sprintf('ave_lmse: %f\nave_mse_albedo: %f\nave_mse_shading: %f\n',ave_lmse,ave_mse_albedo,ave_mse_shading));

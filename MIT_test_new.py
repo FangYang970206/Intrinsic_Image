@@ -40,11 +40,12 @@ def main():
     parser.add_argument('--shad_reduction',     type=StrToInt,   default=8)
     parser.add_argument('--cuda',               type=str,       default='cuda')
     parser.add_argument('--fullsize',           type=StrToBool, default=False)
+    parser.add_argument('--shad_out_conv',      type=StrToInt, default=3)
     args = parser.parse_args()
 
     device = torch.device(args.cuda)
     reflectance = RIN.SEDecomposerSingle(multi_size=args.refl_multi_size, low_se=args.refl_low_se, skip_se=args.refl_skip_se, detach=args.refl_detach_flag, reduction=args.refl_reduction).to(device)
-    shading = RIN.SEDecomposerSingle(multi_size=args.shad_multi_size, low_se=args.shad_low_se, skip_se=args.shad_skip_se, se_squeeze=args.shad_squeeze_flag, reduction=args.shad_reduction, detach=args.shad_detach_flag).to(device)
+    shading = RIN.SEDecomposerSingle(multi_size=args.shad_multi_size, low_se=args.shad_low_se, skip_se=args.shad_skip_se, se_squeeze=args.shad_squeeze_flag, reduction=args.shad_reduction, detach=args.shad_detach_flag, last_conv_ch=args.shad_out_conv).to(device)
     reflectance.load_state_dict(torch.load(os.path.join(args.save_path, args.refl_checkpoint, args.state_dict_refl)))
     shading.load_state_dict(torch.load(os.path.join(args.save_path, args.shad_checkpoint, args.state_dict_shad)))
     print('load checkpoint success!')
