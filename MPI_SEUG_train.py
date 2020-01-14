@@ -73,7 +73,8 @@ def main():
     parser.add_argument('--data_augmentation',  type=StrToBool,  default=False)
     parser.add_argument('--fullsize',           type=StrToBool,  default=False)
     parser.add_argument('--fullsize_test',      type=StrToBool,  default=False)
-    parser.add_argument('--image_size',         type=StrToInt, default=256)
+    parser.add_argument('--image_size',         type=StrToInt,   default=256)
+    parser.add_argument('--ttur',               type=StrToBool,  default=False)
     args = parser.parse_args()
 
     check_folder(args.save_path)
@@ -91,10 +92,13 @@ def main():
         cur_epoch = args.cur_epoch
         print('load checkpoint success!')
     composer = RIN.SEComposer(reflectance, shading, args.refl_multi_size, args.shad_multi_size).to(device)
-    # if args.refl_gan:
-    Discriminator_R = RIN.SEUG_Discriminator().to(device)
-    # if args.shad_gan:
-    Discriminator_S = RIN.SEUG_Discriminator().to(device)
+    
+    if not args.ttur:
+        Discriminator_R = RIN.SEUG_Discriminator().to(device)
+        Discriminator_S = RIN.SEUG_Discriminator().to(device)
+    else:
+        Discriminator_R = RIN.SEUG_Discriminator_new().to(device)
+        Discriminator_S = RIN.SEUG_Discriminator_new().to(device)
     
     if args.data_augmentation:
         print('data_augmentation.....')
@@ -130,6 +134,7 @@ def main():
     if args.data_augmentation:
         print('augmentation...')
         train_transform = RIN_pipeline.MPI_Train_Agumentation_fy2()
+
     train_set = RIN_pipeline.MPI_Dataset_Revisit(train_txt, transform=train_transform if args.data_augmentation else None, refl_multi_size=args.refl_multi_size, shad_multi_size=args.shad_multi_size, image_size=args.image_size)
     train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, num_workers=args.loader_threads, shuffle=True)
 
@@ -145,7 +150,10 @@ def main():
 
     writer = SummaryWriter(log_dir=args.save_path)
 
-    trainer = RIN_pipeline.SEUGTrainer(composer, Discriminator_R, Discriminator_S, train_loader, device, writer, args)
+    if not args.ttur:
+        trainer = RIN_pipeline.SEUGTrainer(composer, Discriminator_R, Discriminator_S, train_loader, device, writer, args)
+    else:
+        trainer = RIN_pipeline.SEUGTrainerNew(composer, Discriminator_R, Discriminator_S, train_loader, device, writer, args)
 
     best_albedo_loss = 9999
     best_shading_loss = 9999

@@ -311,9 +311,34 @@ class SEUG_Discriminator(nn.Module):
         # out = self.conv(x) #输出大小是32x32，其他与生成器类似
         return y1, y2, y3, y4
 
+class SEUG_Discriminator_new(nn.Module):
+    def __init__(self, input_nc=3, ndf=64, n_layers=5):
+        super(SEUG_Discriminator_new, self).__init__()
+        self.conv1_block = nn.Sequential(nn.utils.spectral_norm(
+                                         nn.Conv2d(input_nc, ndf, kernel_size=4, stride=2, padding=1, bias=True)),
+                                         nn.LeakyReLU(0.1, True))
+        self.conv2_block = nn.Sequential(nn.utils.spectral_norm(
+                                         nn.Conv2d(ndf, ndf * 2, kernel_size=4, stride=2, padding=1, bias=True)),
+                                         nn.LeakyReLU(0.1, True))
+        self.conv3_block = nn.Sequential(nn.utils.spectral_norm(
+                                         nn.Conv2d(ndf * 2, ndf * 4, kernel_size=4, stride=2, padding=1, bias=True)),
+                                         nn.LeakyReLU(0.1, True))
+        self.conv4_block = nn.Sequential(nn.utils.spectral_norm(
+                                         nn.Conv2d(ndf * 4, ndf * 8, kernel_size=4, stride=2, padding=1, bias=True)),
+                                         nn.LeakyReLU(0.1, True))
+        self.conv = nn.Conv2d(ndf * 8, 1, kernel_size=3, stride=1, padding=1, bias=False)
+
+    def forward(self, input):
+        x1 = self.conv1_block(input)
+        x2 = self.conv2_block(x1)
+        x3 = self.conv3_block(x2)
+        x4 = self.conv4_block(x3)
+        y = self.conv(x4)
+        return y
+
 
 if __name__ == '__main__':
-    inp = Variable(torch.randn(24,3,256,256)).to('cuda')
-    decomposer = SEDecomposer(skip_se=True).to('cuda')
-    out = decomposer.forward(inp)
-    print([i.size() for i in out])
+    inp = torch.randn(1,3,32,32).to('cuda')
+    SEUG_D = SEUG_Discriminator_new().to('cuda')
+    out = SEUG_D.forward(inp)
+    print(out.size())

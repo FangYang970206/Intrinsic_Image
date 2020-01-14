@@ -19,6 +19,7 @@ from .MPI_Trainer_Origin_RemoveShape import MPI_TrainerOriginRemoveShape
 from .Unet_Trainer_origin import Unet_TrainerOrigin
 from .Octave_trainer import OctaveTrainer
 from .MPI_SEUG_trainer import SEUGTrainer
+from .MPI_SEUG_trainer_new import SEUGTrainerNew
 from .gradient_loss import GradientLoss
 from .WHDRHingeLossPara import WHDRHingeLossPara, WHDRHingeLossParaModule
 from .WHDRHingeLossParaPro import WHDRHingeLossParaPro, WHDRHingeLossParaProModule
