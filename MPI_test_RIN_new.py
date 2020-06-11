@@ -39,7 +39,7 @@ def main():
     parser.add_argument('--refl_reduction',     type=StrToInt,   default=8)
     parser.add_argument('--shad_reduction',     type=StrToInt,   default=8)
     parser.add_argument('--cuda',               type=str,       default='cuda')
-    parser.add_argument('--fullsize',           type=StrToBool, default=True)
+    parser.add_argument('--fullsize',      type=StrToBool, default=True)
     args = parser.parse_args()
 
     device = torch.device(args.cuda)

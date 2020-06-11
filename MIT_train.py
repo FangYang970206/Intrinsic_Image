@@ -19,10 +19,10 @@ from utils import *
 
 
 def main():
-    random.seed(9999)
-    torch.manual_seed(9999)
-    torch.cuda.manual_seed(9999)
-    np.random.seed(9999)
+    # random.seed(9999)
+    # torch.manual_seed(9999)
+    # torch.cuda.manual_seed(9999)
+    # np.random.seed(9999)
     cudnn.benchmark = True
     parser = argparse.ArgumentParser()
     parser.add_argument('--mode',               type=str,   default='train')
@@ -36,7 +36,7 @@ def main():
     help='learning rate')
     parser.add_argument('--save_model',         type=bool,  default=True,
     help='whether to save model or not')
-    parser.add_argument('--num_epochs',         type=int,   default=160)
+    parser.add_argument('--num_epochs',         type=int,   default=300)
     parser.add_argument('--batch_size',         type=int,   default=22)
     parser.add_argument('--checkpoint',         type=StrToBool,  default=False)
     parser.add_argument('--state_dict_refl',    type=str,   default='composer_reflectance_state.t7')
@@ -84,7 +84,7 @@ def main():
     check_folder(args.save_path)
     check_folder(os.path.join(args.save_path, args.refl_checkpoint))
     check_folder(os.path.join(args.save_path, args.shad_checkpoint))
-    device = torch.device("cuda: 1" if torch.cuda.is_available() else 'cpu')
+    device = torch.device("cuda" if torch.cuda.is_available() else 'cpu')
     # pylint: disable=E1101
     # device = torch.device("cuda" if torch.cuda.is_available() else 'cpu')
     # pylint: disable=E1101

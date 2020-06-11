@@ -9,7 +9,7 @@ from torchvision.transforms import ToTensor
 
 
 class MIT_Dataset_Revisit(Data.Dataset):
-    def __init__(self, FileName, mode='train', sel=['reflectance', 'shading', 'mask'], transform = None, refl_multi_size=None, shad_multi_size=None, image_size=None):
+    def __init__(self, FileName, mode='train', sel=['reflectance', 'shading', 'mask'], transform = None, refl_multi_size=None, shad_multi_size=None, image_size=None, fullsize=False,):
         self.FileName = FileName
         self.toTensor = ToTensor()
         self.mode = mode
@@ -18,6 +18,7 @@ class MIT_Dataset_Revisit(Data.Dataset):
         self.refl_multi_size = refl_multi_size
         self.shad_multi_size = shad_multi_size
         self.image_size = image_size
+        self.fullsize = fullsize
         with open(FileName) as f:
             for line in f.readlines():
                 self.names.append(line)
@@ -28,10 +29,16 @@ class MIT_Dataset_Revisit(Data.Dataset):
         shading_path = self.names[idx].replace('input', self.sel[1]).strip()
         mask_path = self.names[idx].replace('input', self.sel[2]).strip()
 
-        input_image = Image.open(inp_path).resize((256, 256)).convert('RGB')
-        albedo_image = Image.open(albedo_path).resize((256, 256)).convert('RGB')
-        shading_image = Image.open(shading_path).resize((256, 256)).convert('RGB')
-        mask = Image.open(mask_path).resize((256, 256)).convert('RGB')
+        if self.fullsize:
+            input_image = Image.open(inp_path).convert('RGB')
+            albedo_image = Image.open(albedo_path).convert('RGB')
+            shading_image = Image.open(shading_path).convert('RGB')
+            mask = Image.open(mask_path).convert('RGB')
+        else:
+            input_image = Image.open(inp_path).resize((256, 256)).convert('RGB')
+            albedo_image = Image.open(albedo_path).resize((256, 256)).convert('RGB')
+            shading_image = Image.open(shading_path).resize((256, 256)).convert('RGB')
+            mask = Image.open(mask_path).resize((256, 256)).convert('RGB')
 
         if self.mode == 'train':
             if random.random() < 0.5:

@@ -5,6 +5,7 @@ from tqdm import tqdm
 from .eval_meterics import calc_siError, clc_pad
 from .whdr import compute_whdr
 import json
+import torch
 from utils import *
 
 
@@ -133,10 +134,10 @@ def MIT_test_unet(model, loader, device, args):
             shading_g = shading_g.cpu().clamp(0, 1).squeeze()
             mask_g = mask_g.cpu().clamp(0, 1).squeeze()
 
-            A_mse += MIT_error(albedo_fake, albedo_g, mask_g).item()
-            S_mse += MIT_error(shading_fake, shading_g, mask_g).item()
+            A_mse += torch.log(MIT_error(albedo_fake, albedo_g, mask_g))
+            S_mse += torch.log(MIT_error(shading_fake, shading_g, mask_g))
             count += 1
-    return [A_mse/count, S_mse/count]
+    return [torch.exp(A_mse/count).item(), torch.exp(S_mse/count).item()]
 
 def MPI_test_unet(model, loader, device, args):
     model.eval()

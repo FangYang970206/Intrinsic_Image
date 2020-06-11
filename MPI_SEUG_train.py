@@ -32,7 +32,7 @@ def main():
     help='number of parallel data-loading threads')
     parser.add_argument('--save_model',         type=bool,  default=True,
     help='whether to save model or not')
-    parser.add_argument('--num_epochs',         type=int,   default=160)
+    parser.add_argument('--num_epochs',         type=int,   default=100)
     parser.add_argument('--batch_size',         type=int,   default=20)
     parser.add_argument('--checkpoint',         type=StrToBool,  default=False)
     parser.add_argument('--state_dict_refl',    type=str,   default='composer_reflectance_state.t7')

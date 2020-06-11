@@ -1,6 +1,7 @@
 log*/
 MIT_logs/
 MPI_logs*/
+MPI_log_paper/
 .vscode/
 __pycache__/
 *.bat

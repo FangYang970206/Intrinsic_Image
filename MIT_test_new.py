@@ -18,7 +18,6 @@ from utils import *
 def main():
     cudnn.benchmark = True
     parser = argparse.ArgumentParser()
-    parser.add_argument('--split',              type=str,   default='SceneSplit')
     parser.add_argument('--save_path',          type=str,   default='MPI_logs_new\\GAN_RIID_updateLR3_epoch160_CosbfVGG_SceneSplit_refl-se-skip_shad-se-low_multi_new_shadSqueeze_grad\\',
     help='save path of model, visualizations, and tensorboard')
     parser.add_argument('--loader_threads',     type=float, default=8,
@@ -40,7 +39,7 @@ def main():
     parser.add_argument('--shad_reduction',     type=StrToInt,   default=8)
     parser.add_argument('--cuda',               type=str,       default='cuda')
     parser.add_argument('--fullsize',           type=StrToBool, default=False)
-    parser.add_argument('--shad_out_conv',      type=StrToInt, default=3)
+    parser.add_argument('--shad_out_conv',      type=StrToInt, default=1)
     args = parser.parse_args()
 
     device = torch.device(args.cuda)
@@ -53,23 +52,15 @@ def main():
 
     if args.fullsize:
         print('test fullsize....')
-        MPI_Image_Split_test_txt = 'D:\\fangyang\\intrinsic_by_fangyang\\MPI_TXT\\MPI_main_imageSplit-fullsize-ChenSplit-test.txt'
-        MPI_Scene_Split_test_txt = 'D:\\fangyang\\intrinsic_by_fangyang\\MPI_TXT\\MPI_main_sceneSplit-fullsize-NoDefect-test.txt'
-        h, w = 436,1024
-        pad_h,pad_w = clc_pad(h,w,16)
-        print(pad_h, pad_w)
-        tmp_pad = nn.ReflectionPad2d((0,pad_w,0,pad_h))
-        tmp_inversepad = nn.ReflectionPad2d((0,-pad_w,0,-pad_h))
+        MIT_test_txt = 'D:\\fangyang\\intrinsic_by_fangyang\\MIT_TXT\\MIT_BarronSplit_fullsize_test.txt'
+        
     else:
         print('test size256....')
         MIT_test_txt = 'MIT_TXT\\MIT_BarronSplit_test.txt'
 
-    if args.fullsize:
-        test_txt = MPI_Image_Split_test_txt
-    else:
-        test_txt = MIT_test_txt
+    test_txt = MIT_test_txt
 
-    test_set = RIN_pipeline.MIT_Dataset_Revisit(test_txt, mode='test')
+    test_set = RIN_pipeline.MIT_Dataset_Revisit(test_txt, mode='test', fullsize=args.fullsize)
     test_loader = torch.utils.data.DataLoader(test_set, batch_size=1, num_workers=args.loader_threads, shuffle=False)
 
     if args.fullsize:
@@ -93,7 +84,13 @@ def main():
             print(ind)
             inp = [t.to(device) for t in tensors]
             input_g, albedo_g, shading_g, mask_g = inp
+            
             if args.fullsize:
+                h,w = input_g.size()[2], input_g.size()[3]
+                pad_h,pad_w = clc_pad(h,w,16)
+                print(pad_h, pad_w)
+                tmp_pad = nn.ReflectionPad2d((0,pad_w,0,pad_h))
+                tmp_inversepad = nn.ReflectionPad2d((0,-pad_w,0,-pad_h))
                 input_g = tmp_pad(input_g)
             if args.refl_multi_size and args.shad_multi_size:
                 albedo_fake, shading_fake, _, _ = composer.forward(input_g)
