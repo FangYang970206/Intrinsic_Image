@@ -125,7 +125,7 @@ class SELayerImproved(nn.Module):
 
 class SEDecomposerSingle(nn.Module):
 
-    def __init__(self, channels=[3, 32, 64, 128, 256], kernel_size=3, padding=1, skip_se=False, low_se=False, se_improved=False, multi_size=False, image_size=256, se_squeeze=False, reduction=8, detach=False, bn=True, act="relu", last_conv_ch=3):
+    def __init__(self, channels=[3, 32, 64, 128, 256], kernel_size=3, padding=1, skip_se=False, low_se=False, se_improved=False, multi_size=False, image_size=256, se_squeeze=False, reduction=8, detach=False, bn=True, act="relu", last_conv_ch=3, heatmap=False):
         super(SEDecomposerSingle, self).__init__()
 
         stride_fn = lambda ind: 1 if ind==0 else 2
@@ -141,6 +141,7 @@ class SEDecomposerSingle(nn.Module):
         self.detach = detach
         self.bn = bn
         self.last_conv_ch = last_conv_ch
+        self.heapmap = heatmap
         if not self.bn:
             print(" IN mode")
         else:
@@ -176,6 +177,8 @@ class SEDecomposerSingle(nn.Module):
         
         self.decoder_reflectance = build_encoder(channels, kernel_size, padding, stride_fn, mult=2, se_squeeze=self.se_squeeze, reduction=self.reduction, bn=self.bn)
 
+        self.h = 0
+        self.w = 0
         self.upsampler = nn.Upsample(scale_factor=2)
         if self.low_se:
             self.se_layer = SELayerImproved(channels[0]) if self.se_improved else SELayer(channels[0], act=self.act)
@@ -195,20 +198,23 @@ class SEDecomposerSingle(nn.Module):
             if ind != 0:
                 x = self.upsampler(x)
             if self.skip_se:
-                encoded[-(ind+1)] = self.se_skip_modulelist[-(ind+1)](encoded[-(ind+1)])
+                x_tmp = self.se_skip_modulelist[-(ind+1)](encoded[-(ind+1)])
+                if self.heapmap and x_tmp.size()[-1] == self.w // 2:
+                    heapmapout = x_tmp.detach()
+                encoded[-(ind+1)] = x_tmp
             x = torch.cat( (x, encoded[-(ind+1)]), 1)
             if self.act == 'relu':
                 x = F.leaky_relu(x, inplace=True)
             else:
                 x = F.elu(x, inplace=True)
             if self.multi_size:
-                if x.size()[-1] == self.image_size // 4 and x.size()[-2] == self.image_size // 4:
+                if x.size()[-1] == self.w // 4 and x.size()[-2] == self.h // 4:
                     frame1 = self.frame1(x)
                     if self.last_conv_ch == 1:
                         frame_list.append(frame1.repeat(1,3,1,1))
                     else:
                         frame_list.append(frame1)
-                if x.size()[-1] == self.image_size // 2 and x.size()[-2] == self.image_size // 2:
+                if x.size()[-1] == self.w // 2 and x.size()[-2] == self.h // 2:
                     frame2 = self.frame2(x)
                     if self.last_conv_ch == 1:
                         frame_list.append(frame2.repeat(1,3,1,1))
@@ -219,12 +225,17 @@ class SEDecomposerSingle(nn.Module):
         if self.last_conv_ch == 1:
             x = x.repeat(1,3,1,1)
         if self.multi_size:
-            return x, frame_list
+            if self.heapmap:
+                return x, frame_list, heapmapout
+            else:
+                return x, frame_list
         else:
             return x
 
     def forward(self, inp):
-        ## reflectance part 
+        ## reflectance part
+        self.w = inp.size()[-1]
+        self.h = inp.size()[-2]
         x1 = inp
         encoded1 = []
         for ind in range(len(self.encoder1)):
@@ -233,6 +244,8 @@ class SEDecomposerSingle(nn.Module):
                 x1 = F.leaky_relu(x1, inplace=True)
             else:
                 x1 = F.elu(x1, inplace=True)
+            if ind == 1 and self.heapmap:
+                heapmapin = x1.detach()
             if self.detach:
                 encoded1.append(x1.detach())
             else:
@@ -240,8 +253,12 @@ class SEDecomposerSingle(nn.Module):
         if self.low_se:
             x1 = self.se_layer(x1)
         if self.multi_size:
-            x1, frame_list = self.__decode(self.decoder_reflectance, encoded1, x1)
-            return x1, frame_list
+            if self.heapmap:
+                x1, frame_list, heapmapout = self.__decode(self.decoder_reflectance, encoded1, x1)
+                return x1, frame_list, [heapmapin, heapmapout]
+            else:
+                x1, frame_list = self.__decode(self.decoder_reflectance, encoded1, x1)
+                return x1, frame_list
         else:
             x1 = self.__decode(self.decoder_reflectance, encoded1, x1)
             return x1

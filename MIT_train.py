@@ -19,10 +19,10 @@ from utils import *
 
 
 def main():
-    # random.seed(9999)
-    # torch.manual_seed(9999)
-    # torch.cuda.manual_seed(9999)
-    # np.random.seed(9999)
+    random.seed(6666)
+    torch.manual_seed(6666)
+    torch.cuda.manual_seed(6666)
+    np.random.seed(6666)
     cudnn.benchmark = True
     parser = argparse.ArgumentParser()
     parser.add_argument('--mode',               type=str,   default='train')
@@ -36,8 +36,8 @@ def main():
     help='learning rate')
     parser.add_argument('--save_model',         type=bool,  default=True,
     help='whether to save model or not')
-    parser.add_argument('--num_epochs',         type=int,   default=300)
-    parser.add_argument('--batch_size',         type=int,   default=22)
+    parser.add_argument('--num_epochs',         type=int,   default=160)
+    parser.add_argument('--batch_size',         type=StrToInt,   default=16)
     parser.add_argument('--checkpoint',         type=StrToBool,  default=False)
     parser.add_argument('--state_dict_refl',    type=str,   default='composer_reflectance_state.t7')
     parser.add_argument('--state_dict_shad',    type=str,    default='composer_shading_state.t7')
@@ -76,9 +76,10 @@ def main():
     # parser.add_argument('--shad_gan',           type=StrToBool,  default=False)
     parser.add_argument('--data_augmentation',  type=StrToBool,  default=False)
     parser.add_argument('--fullsize',           type=StrToBool,  default=False)
-    parser.add_argument('--fullsize_test',      type=StrToBool,  default=False)
+    # parser.add_argument('--fullsize_test',      type=StrToBool,  default=False)
     parser.add_argument('--image_size',         type=StrToInt, default=256)
     parser.add_argument('--shad_out_conv',      type=StrToInt, default=3)
+    parser.add_argument('--finetune',           type=StrToBool, default=False)
     args = parser.parse_args()
 
     check_folder(args.save_path)
@@ -89,7 +90,7 @@ def main():
     # device = torch.device("cuda" if torch.cuda.is_available() else 'cpu')
     # pylint: disable=E1101
     reflectance = RIN.SEDecomposerSingle(multi_size=args.refl_multi_size, low_se=args.refl_low_se, skip_se=args.refl_skip_se, detach=args.refl_detach_flag, reduction=args.refl_reduction, bn=args.refl_bn, act=args.refl_act).to(device)
-    shading = RIN.SEDecomposerSingle(multi_size=args.shad_multi_size, low_se=args.shad_low_se, skip_se=args.shad_skip_se, se_squeeze=args.shad_squeeze_flag, reduction=args.shad_reduction, detach=args.shad_detach_flag, bn=args.shad_bn, act=args.shad_act, last_conv_ch=1).to(device)
+    shading = RIN.SEDecomposerSingle(multi_size=args.shad_multi_size, low_se=args.shad_low_se, skip_se=args.shad_skip_se, se_squeeze=args.shad_squeeze_flag, reduction=args.shad_reduction, detach=args.shad_detach_flag, bn=args.shad_bn, act=args.shad_act, last_conv_ch=args.shad_out_conv).to(device)
     cur_epoch = 0
     if args.checkpoint:
         reflectance.load_state_dict(torch.load(os.path.join(args.save_path, args.refl_checkpoint, args.state_dict_refl)))
@@ -104,13 +105,17 @@ def main():
     # if args.shad_gan:
     Discriminator_S = RIN.SEUG_Discriminator().to(device)
 
+    MIT_train_fullsize_txt = 'MIT_TXT\\MIT_BarronSplit_fullsize_train.txt'
+    MIT_test_fullsize_txt = 'MIT_TXT\\MIT_BarronSplit_fullsize_test.txt'
     MIT_train_txt = 'MIT_TXT\\MIT_BarronSplit_train.txt'
     MIT_test_txt = 'MIT_TXT\\MIT_BarronSplit_test.txt'
-
-    train_set = RIN_pipeline.MIT_Dataset_Revisit(MIT_train_txt, mode='train', refl_multi_size=args.refl_multi_size, shad_multi_size=args.shad_multi_size, image_size=args.image_size)
+    if args.fullsize and not args.finetune:
+        train_set = RIN_pipeline.MIT_Dataset_Revisit(MIT_train_fullsize_txt, mode='train', refl_multi_size=args.refl_multi_size, shad_multi_size=args.shad_multi_size, image_size=args.image_size, fullsize=args.fullsize)
+    else:
+        train_set = RIN_pipeline.MIT_Dataset_Revisit(MIT_train_txt, mode='train', refl_multi_size=args.refl_multi_size, shad_multi_size=args.shad_multi_size, image_size=args.image_size)
     train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, num_workers=args.loader_threads, shuffle=True)
 
-    test_set = RIN_pipeline.MIT_Dataset_Revisit(MIT_test_txt, mode='test')
+    test_set = RIN_pipeline.MIT_Dataset_Revisit(MIT_test_fullsize_txt, mode='test')
     test_loader = torch.utils.data.DataLoader(test_set, batch_size=1, num_workers=args.loader_threads, shuffle=False)
     
     # test_loader_2 = torch.utils.data.DataLoader(test_set, batch_size=10, num_workers=args.loader_threads, shuffle=False)
@@ -118,15 +123,30 @@ def main():
     writer = SummaryWriter(log_dir=args.save_path)
     best_albedo_loss = 9999
     best_shading_loss = 9999
+    best_avg_lmse = 9999
+    flag = True
     # trainer = RIN_pipeline.MIT_TrainerOrigin(composer, train_loader, args.lr, device, writer)
     trainer = RIN_pipeline.SEUGTrainer(composer, Discriminator_R, Discriminator_S, train_loader, device, writer, args)
     logging.info('start training....')
     for epoch in range(cur_epoch, args.num_epochs):
         print('<Main> Epoch {}'.format(epoch))
-        
-        trainer.train()
 
-        albedo_test_loss, shading_test_loss = RIN_pipeline.MIT_test_unet(composer, test_loader, device, args)
+        trainer.train()
+        
+        if args.finetune:
+            if flag and args.finetune:
+                flag = False
+                train_set = RIN_pipeline.MIT_Dataset_Revisit(MIT_train_fullsize_txt, mode='train', refl_multi_size=args.refl_multi_size, shad_multi_size=args.shad_multi_size, image_size=args.image_size, fullsize=args.fullsize)
+                train_loader = torch.utils.data.DataLoader(train_set, batch_size=1, num_workers=args.loader_threads, shuffle=True)
+                trainer = RIN_pipeline.SEUGTrainer(composer, Discriminator_R, Discriminator_S, train_loader, device, writer, args)
+            else:
+                flag = True
+                train_set = RIN_pipeline.MIT_Dataset_Revisit(MIT_train_txt, mode='train', refl_multi_size=args.refl_multi_size, shad_multi_size=args.shad_multi_size, image_size=args.image_size)
+                train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, num_workers=args.loader_threads, shuffle=True)
+                trainer = RIN_pipeline.SEUGTrainer(composer, Discriminator_R, Discriminator_S, train_loader, device, writer, args)      
+        
+
+        albedo_test_loss, shading_test_loss, ave_lmse = RIN_pipeline.MIT_test_unet(composer, test_loader, device, args)
         # albedo_test_loss, shading_test_loss = 0, 0
         # with torch.no_grad():
         #     composer.eval()
@@ -180,7 +200,13 @@ def main():
             #     torch.save(state, os.path.join(args.save_path, args.shad_checkpoint, 'composer_shading_state_{}.t7'.format(epoch)))
             with open(os.path.join(args.save_path, 'shading_loss.txt'), 'a+') as f:
                 f.write('epoch{} --- shading_loss:{}\n'.format(epoch, shading_test_loss))
-
+        if ave_lmse < best_avg_lmse:
+            best_avg_lmse = ave_lmse
+            # if args.save_model:
+            #     state = composer.shading.state_dict()
+            #     torch.save(state, os.path.join(args.save_path, args.shad_checkpoint, 'composer_shading_state_{}.t7'.format(epoch)))
+            with open(os.path.join(args.save_path, 'LMSE.txt'), 'a+') as f:
+                f.write('epoch{}---AVG_LMSE:{}\n'.format(epoch, best_avg_lmse))
         # with open(os.path.join(args.save_path, 'loss_every_epoch.txt'), 'a+') as f:
         #     f.write('epoch{} --- average_loss: {}, albedo_loss:{}, shading_loss:{}\n'.format(epoch, best_loss, cur_refl_loss, cur_shad_loss))
 

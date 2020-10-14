@@ -106,6 +106,7 @@ class SEUGTrainer:
             self.optimizer_D.zero_grad()
 
             if self.refl_multi_size and self.shad_multi_size:
+                # print(input_g.size())
                 lab_refl_pred, lab_shad_pred, lab_refl_pred_list, lab_shad_pred_list = self.G.forward(input_g)
             elif self.refl_multi_size:
                 lab_refl_pred, lab_shad_pred, lab_refl_pred_list = self.G.forward(input_g)
@@ -166,6 +167,8 @@ class SEUGTrainer:
                 refl_cos_loss = self.cos(lab_refl_pred, albedo_g)
             
             if self.refl_multi_size:
+                # print(lab_refl_pred_list[0].size())
+                # print(refl_frame_list[0].size())
                 refl_multi_size_loss = 0.6 * self.mse(lab_refl_pred_list[0], refl_frame_list[0]) + \
                                        0.8 * self.mse(lab_refl_pred_list[1], refl_frame_list[1])
             if self.refl_bf_flag:

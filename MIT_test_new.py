@@ -37,9 +37,11 @@ def main():
     parser.add_argument('--shad_squeeze_flag',  type=StrToBool,  default=False)
     parser.add_argument('--refl_reduction',     type=StrToInt,   default=8)
     parser.add_argument('--shad_reduction',     type=StrToInt,   default=8)
-    parser.add_argument('--cuda',               type=str,       default='cuda')
-    parser.add_argument('--fullsize',           type=StrToBool, default=False)
-    parser.add_argument('--shad_out_conv',      type=StrToInt, default=1)
+    parser.add_argument('--cuda',               type=str,        default='cuda')
+    parser.add_argument('--fullsize',           type=StrToBool,  default=False)
+    parser.add_argument('--shad_out_conv',      type=StrToInt,   default=3)
+    parser.add_argument('--dataset',            type=str,        default='mit')
+    parser.add_argument('--shapenet_g',         type=StrToBool,  default=False)
     args = parser.parse_args()
 
     device = torch.device(args.cuda)
@@ -49,32 +51,43 @@ def main():
     shading.load_state_dict(torch.load(os.path.join(args.save_path, args.shad_checkpoint, args.state_dict_shad)))
     print('load checkpoint success!')
     composer = RIN.SEComposer(reflectance, shading, args.refl_multi_size, args.shad_multi_size).to(device)
-
-    if args.fullsize:
-        print('test fullsize....')
-        MIT_test_txt = 'D:\\fangyang\\intrinsic_by_fangyang\\MIT_TXT\\MIT_BarronSplit_fullsize_test.txt'
-        
+    
+    if args.dataset == 'mit':
+        if args.fullsize:
+            print('test fullsize....')
+            test_txt = 'D:\\fangyang\\intrinsic_by_fangyang\\MIT_TXT\\MIT_BarronSplit_fullsize_test.txt'
+        else:
+            print('test size256....')
+            test_txt = 'MIT_TXT\\MIT_BarronSplit_test.txt'
+        test_set = RIN_pipeline.MIT_Dataset_Revisit(test_txt, mode='test')
+        test_loader = torch.utils.data.DataLoader(test_set, batch_size=1, num_workers=args.loader_threads, shuffle=False)
     else:
-        print('test size256....')
-        MIT_test_txt = 'MIT_TXT\\MIT_BarronSplit_test.txt'
-
-    test_txt = MIT_test_txt
-
-    test_set = RIN_pipeline.MIT_Dataset_Revisit(test_txt, mode='test', fullsize=args.fullsize)
-    test_loader = torch.utils.data.DataLoader(test_set, batch_size=1, num_workers=args.loader_threads, shuffle=False)
-
-    if args.fullsize:
-        check_folder(os.path.join(args.save_path, "refl_target_fullsize"))
-        check_folder(os.path.join(args.save_path, "refl_output_fullsize"))
-        check_folder(os.path.join(args.save_path, "shad_target_fullsize"))
-        check_folder(os.path.join(args.save_path, "shad_output_fullsize"))
-        check_folder(os.path.join(args.save_path, "mask"))
+        remove_names = os.listdir('F:\\ShapeNet\\remove')
+        if args.shapenet_g:
+            test_set = RIN_pipeline.ShapeNet_Dateset_new_new('F:\\ShapeNet', size_per_dataset=9000, mode='test', image_size=256, remove_names=remove_names, shapenet_g=args.shapenet_g)
+        else:
+            test_set = RIN_pipeline.ShapeNet_Dateset_new_new('F:\\ShapeNet', size_per_dataset=9000, mode='test', image_size=256, remove_names=remove_names)
+        test_loader = torch.utils.data.DataLoader(test_set, batch_size=1, num_workers=args.loader_threads, shuffle=False)
+    
+    if args.shapenet_g:
+        check_folder(os.path.join(args.save_path, "refl_target_G"))
+        check_folder(os.path.join(args.save_path, "shad_target_G"))
+        check_folder(os.path.join(args.save_path, "refl_output_G"))
+        check_folder(os.path.join(args.save_path, "shad_output_G"))
+        check_folder(os.path.join(args.save_path, "mask_G"))
     else:
-        check_folder(os.path.join(args.save_path, "refl_target"))
-        check_folder(os.path.join(args.save_path, "shad_target"))
-        check_folder(os.path.join(args.save_path, "refl_output"))
-        check_folder(os.path.join(args.save_path, "shad_output"))
-        check_folder(os.path.join(args.save_path, "mask"))
+        if args.fullsize:
+            check_folder(os.path.join(args.save_path, "refl_target_fullsize"))
+            check_folder(os.path.join(args.save_path, "refl_output_fullsize"))
+            check_folder(os.path.join(args.save_path, "shad_target_fullsize"))
+            check_folder(os.path.join(args.save_path, "shad_output_fullsize"))
+            check_folder(os.path.join(args.save_path, "mask"))
+        else:
+            check_folder(os.path.join(args.save_path, "refl_target"))
+            check_folder(os.path.join(args.save_path, "shad_target"))
+            check_folder(os.path.join(args.save_path, "refl_output"))
+            check_folder(os.path.join(args.save_path, "shad_output"))
+            check_folder(os.path.join(args.save_path, "mask"))
 
     ToPIL = transforms.ToPILImage()
 
@@ -115,11 +128,18 @@ def main():
             sha_pred = ToPIL(shading_fake.squeeze())
             mask_g = ToPIL(mask_g.cpu().squeeze())
 
-            lab_refl_targ.save(os.path.join(args.save_path, "refl_target_fullsize" if args.fullsize else "refl_target", "{}.png".format(ind)))
-            lab_sha_targ.save(os.path.join(args.save_path, "shad_target_fullsize" if args.fullsize else "shad_target", "{}.png".format(ind)))
-            refl_pred.save(os.path.join(args.save_path, "refl_output_fullsize" if args.fullsize else "refl_output", "{}.png".format(ind)))
-            sha_pred.save(os.path.join(args.save_path, "shad_output_fullsize" if args.fullsize else "shad_output", "{}.png".format(ind)))
-            mask_g.save(os.path.join(args.save_path, "mask", "{}.png".format(ind)))
+            if args.shapenet_g:
+                lab_refl_targ.save(os.path.join(args.save_path, "refl_target_G", "{}.png".format(ind)))
+                lab_sha_targ.save(os.path.join(args.save_path, "shad_target_G", "{}.png".format(ind)))
+                refl_pred.save(os.path.join(args.save_path, "refl_output_G", "{}.png".format(ind)))
+                sha_pred.save(os.path.join(args.save_path, "shad_output_G", "{}.png".format(ind)))
+                mask_g.save(os.path.join(args.save_path, "mask_G", "{}.png".format(ind)))
+            else:
+                lab_refl_targ.save(os.path.join(args.save_path, "refl_target_fullsize" if args.fullsize else "refl_target", "{}.png".format(ind)))
+                lab_sha_targ.save(os.path.join(args.save_path, "shad_target_fullsize" if args.fullsize else "shad_target", "{}.png".format(ind)))
+                refl_pred.save(os.path.join(args.save_path, "refl_output_fullsize" if args.fullsize else "refl_output", "{}.png".format(ind)))
+                sha_pred.save(os.path.join(args.save_path, "shad_output_fullsize" if args.fullsize else "shad_output", "{}.png".format(ind)))
+                mask_g.save(os.path.join(args.save_path, "mask", "{}.png".format(ind)))
 
 if __name__ == "__main__":
     main()

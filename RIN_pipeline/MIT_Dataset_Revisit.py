@@ -34,11 +34,21 @@ class MIT_Dataset_Revisit(Data.Dataset):
             albedo_image = Image.open(albedo_path).convert('RGB')
             shading_image = Image.open(shading_path).convert('RGB')
             mask = Image.open(mask_path).convert('RGB')
+            input_image = self._pad(input_image)
+            albedo_image = self._pad(albedo_image)
+            shading_image = self._pad(shading_image)
+            mask = self._pad(mask)
         else:
-            input_image = Image.open(inp_path).resize((256, 256)).convert('RGB')
-            albedo_image = Image.open(albedo_path).resize((256, 256)).convert('RGB')
-            shading_image = Image.open(shading_path).resize((256, 256)).convert('RGB')
-            mask = Image.open(mask_path).resize((256, 256)).convert('RGB')
+            if self.mode == 'train':
+                input_image = Image.open(inp_path).resize((256, 256)).convert('RGB')
+                albedo_image = Image.open(albedo_path).resize((256, 256)).convert('RGB')
+                shading_image = Image.open(shading_path).resize((256, 256)).convert('RGB')
+                mask = Image.open(mask_path).resize((256, 256)).convert('RGB')
+            else:
+                input_image = Image.open(inp_path).convert('RGB')
+                albedo_image = Image.open(albedo_path).convert('RGB')
+                shading_image = Image.open(shading_path).convert('RGB')
+                mask = Image.open(mask_path).convert('RGB')
 
         if self.mode == 'train':
             if random.random() < 0.5:
@@ -48,11 +58,13 @@ class MIT_Dataset_Revisit(Data.Dataset):
                 mask = mask.transpose(Image.FLIP_LEFT_RIGHT)
         
         if self.refl_multi_size:
-            albedo_frame1 = albedo_image.resize((self.image_size // 4, self.image_size // 4))
-            albedo_frame2 = albedo_image.resize((self.image_size // 2, self.image_size // 2))
+            h, w = albedo_image.size
+            albedo_frame1 = albedo_image.resize((h // 4, w // 4))
+            albedo_frame2 = albedo_image.resize((h // 2, w // 2))
         if self.shad_multi_size:
-            shading_frame1 = shading_image.resize((self.image_size // 4, self.image_size // 4))
-            shading_frame2 = shading_image.resize((self.image_size // 2, self.image_size // 2))
+            h, w = shading_image.size
+            shading_frame1 = shading_image.resize((h // 4, w // 4))
+            shading_frame2 = shading_image.resize((h // 2, w // 2))
         if self.refl_multi_size and self.shad_multi_size:
             return self.toTensor(input_image), self.toTensor(albedo_image), self.toTensor(shading_image), \
                    self.toTensor(mask), [self.toTensor(albedo_frame1), self.toTensor(albedo_frame2)], \
@@ -68,5 +80,17 @@ class MIT_Dataset_Revisit(Data.Dataset):
     
     def __len__(self):
         return len(self.names)
+
+    def _pad(self, img):
+        arr = np.array(img)
+        h, w, ch = arr.shape
+        h_pad = 16 - h % 16
+        w_pad = 16 - w % 16
+        if h_pad != 0:
+            arr = np.concatenate((arr, np.zeros((h_pad,w,ch)).astype('uint8')), axis=0)
+        if w_pad != 0:
+            arr = np.concatenate((arr, np.zeros((h+h_pad,w_pad,ch)).astype('uint8')), axis=1)
+        img = Image.fromarray(arr.astype('uint8')).convert('RGB')
+        return img
         
         

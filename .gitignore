@@ -7,3 +7,12 @@ __pycache__/
 *.bat
 IIW*/
 *.pth
+*.t7
+*.png
+events*
+loss*.txt
+reflectance*.txt
+shading*.txt
+LMSE*.txt
+*.rar
+result.txt
