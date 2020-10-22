@@ -170,18 +170,22 @@ class VQVAE(nn.Module):
         embed_dim=64,
         n_embed=512,
         decay=0.99,
+        vq_flag=True,
     ):
         super().__init__()
 
+        self.vq_flag = vq_flag
         self.enc_b = Encoder(in_channel, channel, n_res_block, n_res_channel, stride=4)
         self.enc_t = Encoder(channel, channel, n_res_block, n_res_channel, stride=2)
         self.quantize_conv_t = nn.Conv2d(channel, embed_dim, 1)
-        self.quantize_t = Quantize(embed_dim, n_embed)
+        if self.vq_flag:
+            self.quantize_t = Quantize(embed_dim, n_embed)
         self.dec_t = Decoder(
             embed_dim, embed_dim, channel, n_res_block, n_res_channel, stride=2
         )
         self.quantize_conv_b = nn.Conv2d(embed_dim + channel, embed_dim, 1)
-        self.quantize_b = Quantize(embed_dim, n_embed)
+        if self.vq_flag:
+            self.quantize_b = Quantize(embed_dim, n_embed)
         self.upsample_t = nn.ConvTranspose2d(
             embed_dim, embed_dim, 4, stride=2, padding=1
         )
@@ -195,29 +199,41 @@ class VQVAE(nn.Module):
         )
 
     def forward(self, input):
-        quant_t, quant_b, diff, _, _ = self.encode(input)
+        if self.vq_flag:
+            quant_t, quant_b, diff, _, _ = self.encode(input)
+        else:
+            quant_t, quant_b = self.encode(input)
         dec = self.decode(quant_t, quant_b)
-
-        return dec, diff
+        if self.vq_flag:
+            return dec, diff
+        else:
+            return dec
 
     def encode(self, input):
         enc_b = self.enc_b(input)
         enc_t = self.enc_t(enc_b)
 
-        quant_t = self.quantize_conv_t(enc_t).permute(0, 2, 3, 1)
-        quant_t, diff_t, id_t = self.quantize_t(quant_t)
-        quant_t = quant_t.permute(0, 3, 1, 2)
-        diff_t = diff_t.unsqueeze(0)
+        if self.vq_flag:
+            quant_t = self.quantize_conv_t(enc_t).permute(0, 2, 3, 1)
+            quant_t, diff_t, id_t = self.quantize_t(quant_t)
+            quant_t = quant_t.permute(0, 3, 1, 2)
+            diff_t = diff_t.unsqueeze(0)
+        else:
+            quant_t = self.quantize_conv_t(enc_t)
 
         dec_t = self.dec_t(quant_t)
         enc_b = torch.cat([dec_t, enc_b], 1)
 
-        quant_b = self.quantize_conv_b(enc_b).permute(0, 2, 3, 1)
-        quant_b, diff_b, id_b = self.quantize_b(quant_b)
-        quant_b = quant_b.permute(0, 3, 1, 2)
-        diff_b = diff_b.unsqueeze(0)
-
-        return quant_t, quant_b, diff_t + diff_b, id_t, id_b
+        if self.vq_flag:
+            quant_b = self.quantize_conv_b(enc_b).permute(0, 2, 3, 1)
+            quant_b, diff_b, id_b = self.quantize_b(quant_b)
+            quant_b = quant_b.permute(0, 3, 1, 2)
+            diff_b = diff_b.unsqueeze(0)
+            return quant_t, quant_b, diff_t + diff_b, id_t, id_b
+        else:
+            quant_b = self.quantize_conv_b(enc_b)
+            return quant_t, quant_b
+        
 
     def decode(self, quant_t, quant_b):
         upsample_t = self.upsample_t(quant_t)
@@ -237,8 +253,9 @@ class VQVAE(nn.Module):
         return dec
 
 if __name__ == "__main__":
-    vae = VQVAE()
-    t = torch.randn(1, 3, 440, 1024)
+    vae = VQVAE(vq_flag=False)
+    t = torch.randn(2, 3, 256, 256)
     out = vae(t)
-    print(out[0].size())
-    print(out[1].size())
+    # print(out.size())
+    for t in out:
+        print(t.size())

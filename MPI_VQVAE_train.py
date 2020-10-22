@@ -33,7 +33,7 @@ def main():
     parser.add_argument('--save_model',         type=bool,  default=True,
     help='whether to save model or not')
     parser.add_argument('--num_epochs',         type=int,   default=100)
-    parser.add_argument('--batch_size',         type=int,   default=20)
+    parser.add_argument('--batch_size',         type=int,   default=32)
     parser.add_argument('--checkpoint',         type=StrToBool,  default=False)
     parser.add_argument('--state_dict_refl',    type=str,   default='composer_reflectance_state.t7')
     parser.add_argument('--state_dict_shad',    type=str,    default='composer_shading_state.t7')
@@ -75,7 +75,8 @@ def main():
     parser.add_argument('--fullsize_test',      type=StrToBool,  default=False)
     parser.add_argument('--image_size',         type=StrToInt,   default=256)
     parser.add_argument('--ttur',               type=StrToBool,  default=False)
-    parser.add_argument('--vae',                type=StrToBool, default=True)
+    parser.add_argument('--vae',                type=StrToBool,  default=True)
+    parser.add_argument('--vq_flag',            type=StrToBool,  default=True)
     args = parser.parse_args()
 
     check_folder(args.save_path)
@@ -84,8 +85,8 @@ def main():
     # pylint: disable=E1101
     device = torch.device(args.cuda)
     # pylint: disable=E1101
-    reflectance = RIN.VQVAE().to(device)
-    shading = RIN.VQVAE().to(device)
+    reflectance = RIN.VQVAE(vq_flag=args.vq_flag).to(device)
+    shading = RIN.VQVAE(vq_flag=args.vq_flag).to(device)
     cur_epoch = 0
     if args.checkpoint:
         reflectance.load_state_dict(torch.load(os.path.join(args.save_path, args.refl_checkpoint, args.state_dict_refl)))
@@ -176,17 +177,16 @@ def main():
         writer.add_scalar('aver_mse', average_loss, epoch)
         with open(os.path.join(args.save_path, 'loss_every_epoch.txt'), 'a+') as f:
             f.write('epoch{} --- average_loss: {}, albedo_loss:{}, shading_loss:{}\n'.format(epoch, average_loss, albedo_test_loss, shading_test_loss))
-        if args.save_model:
+        if albedo_test_loss < best_albedo_loss:
             state = composer.reflectance.state_dict()
             torch.save(state, os.path.join(args.save_path, args.refl_checkpoint, 'composer_reflectance_state_{}.t7'.format(epoch)))
-            state = composer.shading.state_dict()
-            torch.save(state, os.path.join(args.save_path, args.shad_checkpoint, 'composer_shading_state_{}.t7'.format(epoch)))
-        if albedo_test_loss < best_albedo_loss:
             best_albedo_loss = albedo_test_loss
             with open(os.path.join(args.save_path, 'reflectance_loss.txt'), 'a+') as f:
                 f.write('epoch{} --- albedo_loss:{}\n'.format(epoch, albedo_test_loss))
         if shading_test_loss < best_shading_loss:
             best_shading_loss = shading_test_loss
+            state = composer.shading.state_dict()
+            torch.save(state, os.path.join(args.save_path, args.shad_checkpoint, 'composer_shading_state_{}.t7'.format(epoch)))
             with open(os.path.join(args.save_path, 'shading_loss.txt'), 'a+') as f:
                 f.write('epoch{} --- shading_loss:{}\n'.format(epoch, shading_test_loss))
 

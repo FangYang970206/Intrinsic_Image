@@ -280,7 +280,10 @@ def MPI_test_unet(model, loader, device, args):
             # input_g, albedo_g, shading_g, mask_g = tmp_pad(input_g),tmp_pad(albedo_g),tmp_pad(shading_g),tmp_pad(mask_g)
             if args.vae:
                 albedo_list, shading_list = model.forward(input_g)
-                albedo_fake, shading_fake = albedo_list[0], shading_list[0]
+                if args.vq_flag:
+                    albedo_fake, shading_fake = albedo_list[0], shading_list[0]
+                else:
+                    albedo_fake, shading_fake = albedo_list, shading_list
             else:
                 if refl_multi_size and shad_multi_size:
                     albedo_fake, shading_fake, _, _ = model.forward(input_g)
