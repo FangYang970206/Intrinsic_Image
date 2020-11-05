@@ -15,7 +15,7 @@ from .ranger import Ranger
 from .gradient_loss import GradientLoss
 
 
-class VQVAETrainer:
+class BOLDVQVAETrainer:
     def __init__(self, Generator, loader, device, writer, args):
         self.G = Generator
         self.loader = loader
@@ -37,8 +37,6 @@ class VQVAETrainer:
         self.shad_cos_flag = args.shad_cos_flag
         self.refl_grad_flag = args.refl_grad_flag
         self.shad_grad_flag = args.shad_grad_flag
-        self.refl_D_weight_flag = args.refl_D_weight_flag
-        self.shad_D_weight_flag = args.shad_D_weight_flag
         self.weight_decay = args.weight_decay
         self.step = 0
         self.vq_flag = args.vq_flag
@@ -73,7 +71,7 @@ class VQVAETrainer:
         for _, labeled in enumerate(self.loader):
             for i in range(len(labeled)):
                 labeled[i] = labeled[i].to(self.device)
-            input_g, albedo_g, shading_g, _ = labeled
+            input_g, albedo_g, shading_g = labeled
 
             self.optimizer_G.zero_grad()
             
@@ -92,8 +90,8 @@ class VQVAETrainer:
             # if self.refl_multi_size:
             #     refl_multi_size_loss = 0.6 * self.mse(lab_refl_pred_list[0], refl_frame_list[0]) + \
             #                            0.8 * self.mse(lab_refl_pred_list[1], refl_frame_list[1])
-            if self.refl_bf_flag:
-                refl_bf_loss = clc_Loss_albedo(lab_refl_pred, albedo_g, self.device)
+            # if self.refl_bf_flag:
+            #     refl_bf_loss = clc_Loss_albedo(lab_refl_pred, albedo_g, self.device)
 
             if self.refl_vgg_flag:
                 refl_content_loss = self.vgg(lab_refl_pred, albedo_g)
@@ -104,14 +102,13 @@ class VQVAETrainer:
 
             refl_loss = refl_mse_loss + \
                         (refl_content_loss*0.1 if self.refl_vgg_flag else 0) + \
-                        (refl_diff_loss if self.vq_flag else 0) + \
-                        (refl_bf_loss if self.refl_bf_flag else 0)
+                        (refl_diff_loss if self.vq_flag else 0)
             #             (refl_multi_size_loss if self.refl_multi_size else 0) + \
             #             (refl_bf_loss if self.refl_bf_flag else 0) + \
             #             (refl_grad_loss if self.refl_grad_flag else 0)
             #             (refl_cos_loss if self.refl_cos_flag else 0) + \
 
-            # refl_loss.backward()
+            refl_loss.backward()
 
             shad_mse_loss = self.mse(lab_shad_pred, shading_g)
             
@@ -122,8 +119,8 @@ class VQVAETrainer:
             # if self.shad_cos_flag:
             #     shad_cos_loss = self.cos(lab_shad_pred, shading_g)
 
-            if self.shad_bf_flag:
-                shad_bf_loss = clc_Loss_shading(lab_shad_pred, shading_g, self.device)
+            # if self.shad_bf_flag:
+            #     shad_bf_loss = clc_Loss_shading(lab_shad_pred, shading_g, self.device)
 
             if self.shad_vgg_flag:
                 shad_content_loss = self.vgg(lab_shad_pred, shading_g)
@@ -133,19 +130,16 @@ class VQVAETrainer:
             #     shad_grad_loss = self.grad(lab_shad_pred, shading_g)
             shad_loss = shad_mse_loss + \
                         (shad_content_loss*0.1 if self.shad_vgg_flag else 0) + \
-                        (shad_diff_loss if self.vq_flag else 0) + \
-                        (shad_bf_loss if self.shad_bf_flag else 0)
+                        (shad_diff_loss if self.vq_flag else 0)
             # shad_loss = shad_mse_loss + shad_D_loss + \
             #             (shad_cos_loss if self.shad_cos_flag else 0) + \
             #             (shad_content_loss*0.1 if self.shad_vgg_flag else 0) + \
             #             (shad_multi_size_loss if self.shad_multi_size else 0) + \
             #             (shad_bf_loss if self.shad_bf_flag else 0) + \
             #             (shad_grad_loss if self.shad_grad_flag else 0)
-            # shad_loss.backward()
-            # retinex_loss = self.mse(input_g, lab_refl_pred*lab_shad_pred)
+            shad_loss.backward()
             
-            loss = refl_loss + shad_loss
-            loss.backward()
+            # loss.backward()
             self.optimizer_G.step()
 
             self.writer.add_scalar('refl_mse_loss', refl_mse_loss.item(), self.step)

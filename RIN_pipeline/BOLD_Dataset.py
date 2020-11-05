@@ -3,6 +3,7 @@ import torch
 import torch.utils.data as Data
 import scipy.misc
 import numpy as np
+import imageio
 
 
 class BOLD_Dataset(Data.Dataset):
@@ -21,23 +22,13 @@ class BOLD_Dataset(Data.Dataset):
         self.img_size = img_size
         self.file_name = file_name
         if self.file_name is None:
-            if mode == 'train':
-                # self.selections = ['albedo', 'shading', 'input']
-                self.selections = ['orig', 'refl', 'sha']
-            elif mode == 'val':
-                # self.selections = ['albedo', 'shading', 'input']
-                self.selections = ['orig', 'refl', 'sha']
-            elif mode == 'test':
-                # self.selections = ['albedo', 'shading', 'input']
-                self.selections = ['orig', 'refl', 'sha']
+            self.selections = ['orig', 'refl', 'sha']
             self.alldata_files = glob.glob(os.path.join(os.path.join(self.datasets, self.selections[0]), '*.png'))
-            # print(len(self.alldata_files))
             self.image_names = []
             for i in range(len(self.alldata_files)):
                 if 'bottle' not in self.alldata_files[i]:
                     self.image_names.append(self.alldata_files[i].split('\\')[-1])
             random.shuffle(self.image_names)
-            # print(len(self.image_names))
         else:
             self.selections = ['orig', 'refl', 'sha']
             self.image_names = []
@@ -47,43 +38,27 @@ class BOLD_Dataset(Data.Dataset):
 
     def __read_image(self, img_name, sel):
         path = os.path.join(os.path.join(self.datasets, sel), img_name)
-        img = scipy.misc.imread(path, mode='RGB')
+        img = imageio.imread(path)
         # img = scipy.misc.imresize(img, self.img_size) #resize image!
         if self.file_name:
-            img = img.transpose(2,0,1) / 255.
+            if sel == 'sha':
+                img = img[np.newaxis, :, :]/255.
+            else:
+                img = img.transpose(2,0,1) / 255.
         else:
             if sel == 'sha':
                 img = img[np.newaxis, :, :]/255.
             else:
                 img = img.transpose(2,0,1) / 255.
-        return img
+        return torch.from_numpy(img).float()
 
     def __getitem(self, idx):
         outputs = []
         if self.file_name is None:
-            if self.mode == "train":
-                for sel in self.selections:
-                    # if sel == 'input':
-                    #     out = outputs[0]*outputs[1]*255
-                    #     outputs.append(out)
-                    # else:
-                    img_name = self.image_names[idx]
-                    out = self.__read_image(img_name, sel)
-                    outputs.append(out)
-            elif self.mode == 'val':
-                for sel in self.selections:
-                    img_name = self.image_names[idx]
-                    out = self.__read_image(img_name, sel)
-                    outputs.append(out)
-            else:
-                for sel in self.selections:
-                    # if sel == 'input':
-                    #     out = outputs[0]*outputs[1]*255
-                    #     outputs.append(out)
-                    # else:
-                    img_name = self.image_names[idx]
-                    out = self.__read_image(img_name, sel)
-                    outputs.append(out)
+            for sel in self.selections:
+                img_name = self.image_names[idx]
+                out = self.__read_image(img_name, sel)
+                outputs.append(out)
             return outputs
         else:
             for sel in self.selections:
@@ -97,7 +72,7 @@ class BOLD_Dataset(Data.Dataset):
         return outputs
 
     def __len__(self):
-        return self.size_per_dataset
+        return len(self.image_names)
 
 
 if __name__ == "__main__":

@@ -81,9 +81,9 @@ class ResBlock(nn.Module):
         super().__init__()
 
         self.conv = nn.Sequential(
-            nn.ReLU(inplace=True),
             nn.Conv2d(in_channel, channel, 3, padding=1),
-            nn.ReLU(inplace=True),
+            nn.BatchNorm2d(channel),
+            nn.LeakyReLU(inplace=True),
             nn.Conv2d(channel, in_channel, 1),
         )
 
@@ -101,23 +101,24 @@ class Encoder(nn.Module):
         if stride == 4:
             blocks = [
                 nn.Conv2d(in_channel, channel // 2, 4, stride=2, padding=1),
-                nn.ReLU(inplace=True),
+                nn.LeakyReLU(inplace=True),
                 nn.Conv2d(channel // 2, channel, 4, stride=2, padding=1),
-                nn.ReLU(inplace=True),
+                nn.LeakyReLU(inplace=True),
                 nn.Conv2d(channel, channel, 3, padding=1),
             ]
 
         elif stride == 2:
             blocks = [
                 nn.Conv2d(in_channel, channel // 2, 4, stride=2, padding=1),
-                nn.ReLU(inplace=True),
+                nn.BatchNorm2d(channel // 2),
+                nn.LeakyReLU(inplace=True),
                 nn.Conv2d(channel // 2, channel, 3, padding=1),
             ]
 
         for i in range(n_res_block):
             blocks.append(ResBlock(channel, n_res_channel))
 
-        blocks.append(nn.ReLU(inplace=True))
+        blocks.append(nn.LeakyReLU(inplace=True))
 
         self.blocks = nn.Sequential(*blocks)
 
@@ -136,13 +137,13 @@ class Decoder(nn.Module):
         for i in range(n_res_block):
             blocks.append(ResBlock(channel, n_res_channel))
 
-        blocks.append(nn.ReLU(inplace=True))
+        blocks.append(nn.LeakyReLU(inplace=True))
 
         if stride == 4:
             blocks.extend(
                 [
                     nn.ConvTranspose2d(channel, channel // 2, 4, stride=2, padding=1),
-                    nn.ReLU(inplace=True),
+                    nn.LeakyReLU(inplace=True),
                     nn.ConvTranspose2d(
                         channel // 2, out_channel, 4, stride=2, padding=1
                     ),
@@ -159,7 +160,6 @@ class Decoder(nn.Module):
     def forward(self, input):
         return self.blocks(input)
 
-
 class VQVAE(nn.Module):
     def __init__(
         self,
@@ -174,88 +174,139 @@ class VQVAE(nn.Module):
     ):
         super().__init__()
 
-        self.vq_flag = vq_flag
-        self.enc_b = Encoder(in_channel, channel, n_res_block, n_res_channel, stride=4)
+        # self.vq_flag = vq_flag
+        self.enc_b = Encoder(in_channel, channel, n_res_block, n_res_channel, stride=2)
+        self.enc_m = Encoder(channel, channel, n_res_block, n_res_channel, stride=2)
         self.enc_t = Encoder(channel, channel, n_res_block, n_res_channel, stride=2)
-        self.quantize_conv_t = nn.Conv2d(channel, embed_dim, 1)
-        if self.vq_flag:
-            self.quantize_t = Quantize(embed_dim, n_embed)
-        self.dec_t = Decoder(
-            embed_dim, embed_dim, channel, n_res_block, n_res_channel, stride=2
-        )
-        self.quantize_conv_b = nn.Conv2d(embed_dim + channel, embed_dim, 1)
-        if self.vq_flag:
-            self.quantize_b = Quantize(embed_dim, n_embed)
-        self.upsample_t = nn.ConvTranspose2d(
-            embed_dim, embed_dim, 4, stride=2, padding=1
-        )
-        self.dec = Decoder(
-            embed_dim + embed_dim,
-            in_channel,
-            channel,
-            n_res_block,
-            n_res_channel,
-            stride=4,
-        )
+
+        self.res_block1 = ResBlock(channel*2, n_res_channel*2)
+        self.res_block2 = ResBlock(channel*2, n_res_channel*2)
+        
+        self.dec_t = Decoder(channel, channel, channel, n_res_block, n_res_channel, stride=2)
+        self.dec_m = Decoder(channel*2, channel, channel, n_res_block, n_res_channel, stride=2)
+        self.dec_b = Decoder(channel*5, in_channel, channel, n_res_block, n_res_channel, stride=2)
+        
+        self.upsample_t1 = nn.ConvTranspose2d(channel, channel, 4, stride=2, padding=1)
+        self.upsample_t2 = nn.ConvTranspose2d(channel*3, channel*3, 4, stride=2, padding=1)
 
     def forward(self, input):
-        if self.vq_flag:
-            quant_t, quant_b, diff, _, _ = self.encode(input)
-        else:
-            quant_t, quant_b = self.encode(input)
-        dec = self.decode(quant_t, quant_b)
-        if self.vq_flag:
-            return dec, diff
-        else:
-            return dec
-
-    def encode(self, input):
         enc_b = self.enc_b(input)
-        enc_t = self.enc_t(enc_b)
+        enc_m = self.enc_m(enc_b)
+        enc_t = self.enc_t(enc_m)
 
-        if self.vq_flag:
-            quant_t = self.quantize_conv_t(enc_t).permute(0, 2, 3, 1)
-            quant_t, diff_t, id_t = self.quantize_t(quant_t)
-            quant_t = quant_t.permute(0, 3, 1, 2)
-            diff_t = diff_t.unsqueeze(0)
-        else:
-            quant_t = self.quantize_conv_t(enc_t)
+        dec_t = self.dec_t(enc_t)
+        cat_mt = torch.cat([enc_m, dec_t], 1)
+        cat_res_mt = self.res_block1(cat_mt)
+        
+        up1 = self.upsample_t1(enc_t)
+        scale1 = torch.cat([up1, cat_res_mt], 1)
 
-        dec_t = self.dec_t(quant_t)
-        enc_b = torch.cat([dec_t, enc_b], 1)
+        dec_m = self.dec_m(cat_mt)
+        cat_bm = torch.cat([dec_m, enc_b], 1)
+        cat_res_bm = self.res_block2(cat_bm)
 
-        if self.vq_flag:
-            quant_b = self.quantize_conv_b(enc_b).permute(0, 2, 3, 1)
-            quant_b, diff_b, id_b = self.quantize_b(quant_b)
-            quant_b = quant_b.permute(0, 3, 1, 2)
-            diff_b = diff_b.unsqueeze(0)
-            return quant_t, quant_b, diff_t + diff_b, id_t, id_b
-        else:
-            quant_b = self.quantize_conv_b(enc_b)
-            return quant_t, quant_b
+        up2 = self.upsample_t2(scale1)
+        scale2 = torch.cat([up2, cat_res_bm], 1)
+
+        out = self.dec_b(scale2)
+        return out
+
+# class VQVAE(nn.Module):
+#     def __init__(
+#         self,
+#         in_channel=3,
+#         channel=128,
+#         n_res_block=2,
+#         n_res_channel=32,
+#         embed_dim=64,
+#         n_embed=512,
+#         decay=0.99,
+#         vq_flag=True,
+#     ):
+#         super().__init__()
+
+#         self.vq_flag = vq_flag
+#         self.enc_b = Encoder(in_channel, channel, n_res_block, n_res_channel, stride=4)
+#         self.enc_t = Encoder(channel, channel, n_res_block, n_res_channel, stride=2)
+#         self.quantize_conv_t = nn.Conv2d(channel, embed_dim, 1)
+#         if self.vq_flag:
+#             self.quantize_t = Quantize(embed_dim, n_embed)
+#         self.dec_t = Decoder(
+#             embed_dim, embed_dim, channel, n_res_block, n_res_channel, stride=2
+#         )
+#         self.quantize_conv_b = nn.Conv2d(embed_dim + channel, embed_dim, 1)
+#         if self.vq_flag:
+#             self.quantize_b = Quantize(embed_dim, n_embed)
+#         self.upsample_t = nn.ConvTranspose2d(
+#             embed_dim, embed_dim, 4, stride=2, padding=1
+#         )
+#         self.dec = Decoder(
+#             embed_dim + embed_dim,
+#             in_channel,
+#             channel,
+#             n_res_block,
+#             n_res_channel,
+#             stride=4,
+#         )
+
+#     def forward(self, input):
+#         if self.vq_flag:
+#             quant_t, quant_b, diff, _, _ = self.encode(input)
+#         else:
+#             quant_t, quant_b = self.encode(input)
+#         dec = self.decode(quant_t, quant_b)
+#         if self.vq_flag:
+#             return dec, diff
+#         else:
+#             return dec
+
+#     def encode(self, input):
+#         enc_b = self.enc_b(input)
+#         enc_t = self.enc_t(enc_b)
+
+#         if self.vq_flag:
+#             quant_t = self.quantize_conv_t(enc_t).permute(0, 2, 3, 1)
+#             quant_t, diff_t, id_t = self.quantize_t(quant_t)
+#             quant_t = quant_t.permute(0, 3, 1, 2)
+#             diff_t = diff_t.unsqueeze(0)
+#         else:
+#             quant_t = self.quantize_conv_t(enc_t)
+
+#         dec_t = self.dec_t(quant_t)
+#         enc_b = torch.cat([dec_t, enc_b], 1)
+
+#         if self.vq_flag:
+#             quant_b = self.quantize_conv_b(enc_b).permute(0, 2, 3, 1)
+#             quant_b, diff_b, id_b = self.quantize_b(quant_b)
+#             quant_b = quant_b.permute(0, 3, 1, 2)
+#             diff_b = diff_b.unsqueeze(0)
+#             return quant_t, quant_b, diff_t + diff_b, id_t, id_b
+#         else:
+#             quant_b = self.quantize_conv_b(enc_b)
+#             return quant_t, quant_b
         
 
-    def decode(self, quant_t, quant_b):
-        upsample_t = self.upsample_t(quant_t)
-        quant = torch.cat([upsample_t, quant_b], 1)
-        dec = self.dec(quant)
+#     def decode(self, quant_t, quant_b):
+#         upsample_t = self.upsample_t(quant_t)
+#         quant = torch.cat([upsample_t, quant_b], 1)
+#         dec = self.dec(quant)
 
-        return dec
+#         return dec
 
-    def decode_code(self, code_t, code_b):
-        quant_t = self.quantize_t.embed_code(code_t)
-        quant_t = quant_t.permute(0, 3, 1, 2)
-        quant_b = self.quantize_b.embed_code(code_b)
-        quant_b = quant_b.permute(0, 3, 1, 2)
+#     def decode_code(self, code_t, code_b):
+#         quant_t = self.quantize_t.embed_code(code_t)
+#         quant_t = quant_t.permute(0, 3, 1, 2)
+#         quant_b = self.quantize_b.embed_code(code_b)
+#         quant_b = quant_b.permute(0, 3, 1, 2)
 
-        dec = self.decode(quant_t, quant_b)
+#         dec = self.decode(quant_t, quant_b)
 
-        return dec
+#         return dec
 
 if __name__ == "__main__":
     vae = VQVAE(vq_flag=False)
     t = torch.randn(2, 3, 256, 256)
     out = vae(t)
-    # print(out.size())
-    for t in out:
-        print(t.size())
+    print(out.size())
+    # for t in out:
+    #     print(t.size())

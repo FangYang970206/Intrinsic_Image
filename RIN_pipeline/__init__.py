@@ -27,3 +27,4 @@ from .IIW_Dataset_Revisit import IIW_Dataset_Revisit
 from .whdr import whdr_final
 from .IIW_trainer import IIWTrainer
 from .MPI_VQVAE_trainer import VQVAETrainer
+from .BOLD_VQVAE_trainer import BOLDVQVAETrainer

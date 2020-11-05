@@ -97,12 +97,12 @@ def clc_pad(h,w,st=16):
             return st-r
     return _f(h),_f(w)
 
-def clc_efficient_siMSE(fake,real,mask):
+def clc_efficient_siMSE(fake,real,mask,device):
     B,C,H,W = fake.size()
     bn_ch = B*C 
     # hw = H*W
     if mask is None:
-        mask = (Variable(torch.ones(fake.size()))).cuda()
+        mask = (Variable(torch.ones(fake.size()))).to(device)
     if isinstance(fake,Variable):
         X = (mask*fake).view(bn_ch,H,W).data
         Y = (mask*real).view(bn_ch,H,W).data
@@ -124,10 +124,10 @@ def clc_efficient_siMSE(fake,real,mask):
         mse_error += torch.mean((((X[bc,:,:]*alpha) - Y[bc,:,:])**2))
     return mse_error,bn_ch
 
-def clc_efficient_siLMSE(fake,real,mask):
+def clc_efficient_siLMSE(fake,real,mask,device):
 
     if mask is None:
-        mask = (Variable(torch.ones(fake.size()))).cuda()
+        mask = (Variable(torch.ones(fake.size()))).to(device)
     B,C,H,W = fake.size()
     st = int(W//10)
     half_st = int(st // 2)
@@ -147,9 +147,9 @@ def clc_efficient_siLMSE(fake,real,mask):
     LMSE_error = 0
     count = 0
 
-    X_ij = torch.zeros(B,C,half_st*2,half_st*2).cuda()
-    Y_ij = torch.zeros(B,C,half_st*2,half_st*2).cuda()
-    M_ij = torch.zeros(B,C,half_st*2,half_st*2).cuda()
+    X_ij = torch.zeros(B,C,half_st*2,half_st*2).to(device)
+    Y_ij = torch.zeros(B,C,half_st*2,half_st*2).to(device)
+    M_ij = torch.zeros(B,C,half_st*2,half_st*2).to(device)
 
     for j in range(idx_jn-2):
         for i in range(idx_in-2):
@@ -181,7 +181,7 @@ def evaluate_one_k(output, label):
 
 def MIT_error(output, label, mask):
     output, label = output * mask, label * mask
-    alpha = torch.sum(output * label) / torch.max(torch.tensor([1e-8]), torch.sum(output * output))
+    alpha = torch.sum(output * label) / torch.sum(output * output)
     output = alpha * output
     error = torch.mean((torch.masked_select(output, mask.ge(0.5)) - torch.masked_select(label, mask.ge(0.5))) ** 2)
     return error
@@ -199,7 +199,7 @@ def MIT_test_unet(model, loader, device, args):
             print(ind)
             inp = [t.to(device) for t in tensors]
             input_g, albedo_g, shading_g, mask_g = inp
-
+            
             if fullsize:
                 h, w = input_g.size()[2], input_g.size()[3]
                 pad_h,pad_w = clc_pad(h,w,16)
@@ -208,18 +208,25 @@ def MIT_test_unet(model, loader, device, args):
                 tmp_inversepad = nn.ReflectionPad2d((0,-pad_w,0,-pad_h))
                 input_g = tmp_pad(input_g)
             
-            if refl_multi_size and shad_multi_size:
-                albedo_fake, shading_fake, _, _ = model.forward(input_g)
-            elif refl_multi_size or shad_multi_size:
-                albedo_fake, shading_fake, _ = model.forward(input_g)
+            if args.vae:
+                albedo_list, shading_list = model.forward(input_g)
+                if args.vq_flag:
+                    albedo_fake, shading_fake = albedo_list[0], shading_list[0]
+                else:
+                    albedo_fake, shading_fake = albedo_list, shading_list
             else:
-                albedo_fake, shading_fake = model.forward(input_g)
+                if refl_multi_size and shad_multi_size:
+                    albedo_fake, shading_fake, _, _ = model.forward(input_g)
+                elif refl_multi_size or shad_multi_size:
+                    albedo_fake, shading_fake, _ = model.forward(input_g)
+                else:
+                    albedo_fake, shading_fake = model.forward(input_g)
             
             if fullsize:
                 albedo_fake, shading_fake = tmp_inversepad(albedo_fake), tmp_inversepad(shading_fake)
 
-            albedo_fake  = albedo_fake*mask_g
-            shading_fake = shading_fake*mask_g
+            # albedo_fake  = albedo_fake*mask_g
+            # shading_fake = shading_fake*mask_g
 
             # albedo_fake = albedo_fake.cpu().clamp(0, 1).squeeze()
             # shading_fake = shading_fake.cpu().clamp(0, 1).squeeze()
@@ -233,20 +240,20 @@ def MIT_test_unet(model, loader, device, args):
             shading_g = shading_g.clamp(0, 1)
             mask_g = mask_g.clamp(0, 1)
 
-            tmp_Amse,batch_ch  = clc_efficient_siMSE(albedo_fake, albedo_g, mask_g)
-            tmp_Almse,batch_ch  = clc_efficient_siLMSE(albedo_fake, albedo_g, mask_g)
+            # tmp_Amse,batch_ch  = clc_efficient_siMSE(albedo_fake, albedo_g, mask_g)
+            # tmp_Almse,batch_ch  = clc_efficient_siLMSE(albedo_fake, albedo_g, mask_g)
 
-            tmp_Smse,batch_ch  = clc_efficient_siMSE(shading_fake, shading_g, None)
-            tmp_Slmse,batch_ch  = clc_efficient_siLMSE(shading_fake, shading_g, None)
+            tmp_Amse = MIT_error(albedo_fake, albedo_g, mask_g)
+            tmp_Smse = MIT_error(shading_fake, shading_g, mask_g)
 
-            A_mse +=  tmp_Amse / batch_ch
-            S_mse +=  tmp_Smse / batch_ch
-            A_lmse += tmp_Almse / batch_ch
-            S_lmse += tmp_Slmse / batch_ch
+            A_mse +=  tmp_Amse
+            S_mse +=  tmp_Smse
+            # A_lmse += tmp_Almse / batch_ch
+            # S_lmse += tmp_Slmse / batch_ch
             # A_mse += torch.log(MIT_error(albedo_fake, albedo_g, mask_g))
             # S_mse += torch.log(MIT_error(shading_fake, shading_g, mask_g))
             count += 1
-    return [(A_mse/count).item(), (S_mse/count).item(), (((A_lmse + S_lmse)/2)/count).item()]
+    return [(A_mse/count).item(), (S_mse/count).item()]
 
 def MPI_test_unet(model, loader, device, args):
     model.eval()
@@ -272,12 +279,14 @@ def MPI_test_unet(model, loader, device, args):
         for ind, tensors in enumerate(loader):
             print(ind)
             inp = [t.to(device) for t in tensors]
-            input_g, albedo_g, shading_g, mask_g = inp
+            if len(inp) == 4:
+                input_g, albedo_g, shading_g, mask_g = inp
+            else:
+                input_g, albedo_g, shading_g = inp
             
             if fullsize:
                 input_g = tmp_pad(input_g)
-            # print('test here')
-            # input_g, albedo_g, shading_g, mask_g = tmp_pad(input_g),tmp_pad(albedo_g),tmp_pad(shading_g),tmp_pad(mask_g)
+            
             if args.vae:
                 albedo_list, shading_list = model.forward(input_g)
                 if args.vq_flag:
@@ -291,14 +300,13 @@ def MPI_test_unet(model, loader, device, args):
                     albedo_fake, shading_fake, _ = model.forward(input_g)
                 else:
                     albedo_fake, shading_fake = model.forward(input_g)
-            # print('forward success')
-            # input_g,albedo_g,shading_g,mask_g = tmp_inversepad(input_g),tmp_inversepad(albedo_g),tmp_inversepad(shading_g),tmp_inversepad(mask_g)
-            # input_fake, albedo_fake, shading_fake  = tmp_inversepad(input_fake.clamp(0,1)), tmp_inversepad(albedo_fake.clamp(0,1)),tmp_inversepad(shading_fake.clamp(0,1))
+
             if fullsize:
                 albedo_fake, shading_fake = tmp_inversepad(albedo_fake), tmp_inversepad(shading_fake)
 
-            albedo_fake  = albedo_fake*mask_g
-
+            if len(inp) == 4:
+                albedo_fake  = albedo_fake*mask_g
+                
             albedo_fake = albedo_fake.cpu().clamp(0, 1)
             shading_fake = shading_fake.cpu().clamp(0, 1)
             albedo_g = albedo_g.cpu().clamp(0, 1)
