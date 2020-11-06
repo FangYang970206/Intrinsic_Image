@@ -90,25 +90,25 @@ class BOLDVQVAETrainer:
             # if self.refl_multi_size:
             #     refl_multi_size_loss = 0.6 * self.mse(lab_refl_pred_list[0], refl_frame_list[0]) + \
             #                            0.8 * self.mse(lab_refl_pred_list[1], refl_frame_list[1])
-            # if self.refl_bf_flag:
-            #     refl_bf_loss = clc_Loss_albedo(lab_refl_pred, albedo_g, self.device)
+            if self.refl_bf_flag:
+                refl_bf_loss = clc_Loss_albedo(lab_refl_pred, albedo_g, self.device)
 
             if self.refl_vgg_flag:
                 refl_content_loss = self.vgg(lab_refl_pred, albedo_g)
-            if self.vq_flag:
-                refl_diff_loss = refl_diff.mean()
+            # if self.vq_flag:
+            #     refl_diff_loss = refl_diff.mean()
             # if self.refl_grad_flag:
             #     refl_grad_loss = self.grad(lab_refl_pred, albedo_g)
 
             refl_loss = refl_mse_loss + \
                         (refl_content_loss*0.1 if self.refl_vgg_flag else 0) + \
-                        (refl_diff_loss if self.vq_flag else 0)
+                        (refl_bf_loss if self.refl_bf_flag else 0)
             #             (refl_multi_size_loss if self.refl_multi_size else 0) + \
             #             (refl_bf_loss if self.refl_bf_flag else 0) + \
             #             (refl_grad_loss if self.refl_grad_flag else 0)
             #             (refl_cos_loss if self.refl_cos_flag else 0) + \
 
-            refl_loss.backward()
+            # refl_loss.backward()
 
             shad_mse_loss = self.mse(lab_shad_pred, shading_g)
             
@@ -119,40 +119,40 @@ class BOLDVQVAETrainer:
             # if self.shad_cos_flag:
             #     shad_cos_loss = self.cos(lab_shad_pred, shading_g)
 
-            # if self.shad_bf_flag:
-            #     shad_bf_loss = clc_Loss_shading(lab_shad_pred, shading_g, self.device)
+            if self.shad_bf_flag:
+                shad_bf_loss = clc_Loss_shading(lab_shad_pred, shading_g, self.device)
 
             if self.shad_vgg_flag:
                 shad_content_loss = self.vgg(lab_shad_pred, shading_g)
-            if self.vq_flag:
-                shad_diff_loss = shad_diff.mean()
+            # if self.vq_flag:
+            #     shad_diff_loss = shad_diff.mean()
             # if self.shad_grad_flag:
             #     shad_grad_loss = self.grad(lab_shad_pred, shading_g)
             shad_loss = shad_mse_loss + \
                         (shad_content_loss*0.1 if self.shad_vgg_flag else 0) + \
-                        (shad_diff_loss if self.vq_flag else 0)
+                        (shad_bf_loss if self.shad_bf_flag else 0)
             # shad_loss = shad_mse_loss + shad_D_loss + \
             #             (shad_cos_loss if self.shad_cos_flag else 0) + \
             #             (shad_content_loss*0.1 if self.shad_vgg_flag else 0) + \
             #             (shad_multi_size_loss if self.shad_multi_size else 0) + \
             #             (shad_bf_loss if self.shad_bf_flag else 0) + \
             #             (shad_grad_loss if self.shad_grad_flag else 0)
-            shad_loss.backward()
-            
-            # loss.backward()
+            # shad_loss.backward()
+            loss = refl_loss + shad_loss
+            loss.backward()
             self.optimizer_G.step()
 
             self.writer.add_scalar('refl_mse_loss', refl_mse_loss.item(), self.step)
             # self.writer.add_scalar('refl_D_loss', refl_D_loss.item(), self.step)
             if self.refl_vgg_flag:
                 self.writer.add_scalar('refl_content_loss', refl_content_loss.item(), self.step)
-            if self.vq_flag:
-                self.writer.add_scalar('refl_diff_loss', refl_diff_loss.item(), self.step)
+            # if self.vq_flag:
+            #     self.writer.add_scalar('refl_diff_loss', refl_diff_loss.item(), self.step)
             self.writer.add_scalar('shad_mse_loss', shad_mse_loss.item(), self.step)
             if self.shad_vgg_flag:
                 self.writer.add_scalar('shad_content_loss', shad_content_loss.item(), self.step)
-            if self.vq_flag:
-                self.writer.add_scalar('shad_diff_loss', shad_diff_loss.item(), self.step)
+            # if self.vq_flag:
+            #     self.writer.add_scalar('shad_diff_loss', shad_diff_loss.item(), self.step)
             # self.writer.add_scalar('shad_D_loss', shad_D_loss.item(), self.step)
             # if self.shad_grad_flag:
             #     self.writer.add_scalar('shad_grad_loss', shad_grad_loss.item(), self.step)

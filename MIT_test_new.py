@@ -18,14 +18,14 @@ from utils import *
 def main():
     cudnn.benchmark = True
     parser = argparse.ArgumentParser()
-    parser.add_argument('--save_path',          type=str,   default='logs_vqvae\\MIT_base_256x256_noRetinex_withBf_finetune\\',
+    parser.add_argument('--save_path',          type=str,   default='logs_vqvae\\MIT_base_256x256_noRetinex_withBf_leakyrelu_BNUP\\',
     help='save path of model, visualizations, and tensorboard')
     parser.add_argument('--loader_threads',     type=float, default=8,
     help='number of parallel data-loading threads')
     parser.add_argument('--refl_checkpoint',    type=str,   default='refl_checkpoint')
     parser.add_argument('--shad_checkpoint',    type=str,   default='shad_checkpoint')
-    parser.add_argument('--state_dict_refl',         type=str,   default='composer_reflectance_state_99.t7')
-    parser.add_argument('--state_dict_shad',         type=str,   default='composer_shading_state_22.t7')
+    parser.add_argument('--state_dict_refl',         type=str,   default='composer_reflectance_state_30.t7')
+    parser.add_argument('--state_dict_shad',         type=str,   default='composer_shading_state_95.t7')
     parser.add_argument('--refl_skip_se',       type=StrToBool,  default=False)
     parser.add_argument('--shad_skip_se',       type=StrToBool,  default=False)
     parser.add_argument('--refl_low_se',        type=StrToBool,  default=False)

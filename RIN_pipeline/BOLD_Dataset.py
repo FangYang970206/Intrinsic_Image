@@ -39,7 +39,7 @@ class BOLD_Dataset(Data.Dataset):
     def __read_image(self, img_name, sel):
         path = os.path.join(os.path.join(self.datasets, sel), img_name)
         img = imageio.imread(path)
-        # img = scipy.misc.imresize(img, self.img_size) #resize image!
+        img = scipy.misc.imresize(img, self.img_size) #resize image!
         if self.file_name:
             if sel == 'sha':
                 img = img[np.newaxis, :, :]/255.
@@ -72,7 +72,10 @@ class BOLD_Dataset(Data.Dataset):
         return outputs
 
     def __len__(self):
-        return len(self.image_names)
+        if self.size_per_dataset is None:
+            return len(self.image_names)
+        else:
+            return self.size_per_dataset
 
 
 if __name__ == "__main__":

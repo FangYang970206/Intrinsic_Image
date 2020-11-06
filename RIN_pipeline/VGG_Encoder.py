@@ -23,6 +23,7 @@ class VGG_Encoder(nn.Module):
         calc_index = [0, 3, 6, 8, 11, 13, 16, 18]
         if fake.size()[1] == 1:
             fake = fake.repeat(1, 3, 1, 1)
+        if real.size()[1] == 1:
             real = real.repeat(1, 3, 1, 1)
         
         content_loss = 0
