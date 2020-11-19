@@ -36,7 +36,7 @@ def main():
     help='learning rate')
     parser.add_argument('--save_model',         type=bool,  default=True,
     help='whether to save model or not')
-    parser.add_argument('--num_epochs',         type=int,   default=160)
+    parser.add_argument('--num_epochs',         type=int,   default=100)
     parser.add_argument('--batch_size',         type=StrToInt,   default=16)
     parser.add_argument('--checkpoint',         type=StrToBool,  default=False)
     parser.add_argument('--state_dict_refl',    type=str,   default='composer_reflectance_state.t7')
@@ -77,9 +77,10 @@ def main():
     parser.add_argument('--data_augmentation',  type=StrToBool,  default=False)
     parser.add_argument('--fullsize',           type=StrToBool,  default=False)
     # parser.add_argument('--fullsize_test',      type=StrToBool,  default=False)
-    parser.add_argument('--image_size',         type=StrToInt, default=256)
-    parser.add_argument('--shad_out_conv',      type=StrToInt, default=3)
-    parser.add_argument('--finetune',           type=StrToBool, default=False)
+    parser.add_argument('--image_size',         type=StrToInt,   default=256)
+    parser.add_argument('--shad_out_conv',      type=StrToInt,   default=3)
+    parser.add_argument('--finetune',           type=StrToBool,  default=False)
+    parser.add_argument('--vae',                type=StrToBool,  default=False)
     args = parser.parse_args()
 
     check_folder(args.save_path)
@@ -133,20 +134,15 @@ def main():
 
         trainer.train()
         
-        if args.finetune:
+        if epoch >= 80 and args.finetune:
             if flag and args.finetune:
                 flag = False
                 train_set = RIN_pipeline.MIT_Dataset_Revisit(MIT_train_fullsize_txt, mode='train', refl_multi_size=args.refl_multi_size, shad_multi_size=args.shad_multi_size, image_size=args.image_size, fullsize=args.fullsize)
                 train_loader = torch.utils.data.DataLoader(train_set, batch_size=1, num_workers=args.loader_threads, shuffle=True)
                 trainer = RIN_pipeline.SEUGTrainer(composer, Discriminator_R, Discriminator_S, train_loader, device, writer, args)
-            else:
-                flag = True
-                train_set = RIN_pipeline.MIT_Dataset_Revisit(MIT_train_txt, mode='train', refl_multi_size=args.refl_multi_size, shad_multi_size=args.shad_multi_size, image_size=args.image_size)
-                train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, num_workers=args.loader_threads, shuffle=True)
-                trainer = RIN_pipeline.SEUGTrainer(composer, Discriminator_R, Discriminator_S, train_loader, device, writer, args)      
         
 
-        albedo_test_loss, shading_test_loss, ave_lmse = RIN_pipeline.MIT_test_unet(composer, test_loader, device, args)
+        albedo_test_loss, shading_test_loss = RIN_pipeline.MIT_test_unet(composer, test_loader, device, args)
         # albedo_test_loss, shading_test_loss = 0, 0
         # with torch.no_grad():
         #     composer.eval()
@@ -200,13 +196,13 @@ def main():
             #     torch.save(state, os.path.join(args.save_path, args.shad_checkpoint, 'composer_shading_state_{}.t7'.format(epoch)))
             with open(os.path.join(args.save_path, 'shading_loss.txt'), 'a+') as f:
                 f.write('epoch{} --- shading_loss:{}\n'.format(epoch, shading_test_loss))
-        if ave_lmse < best_avg_lmse:
-            best_avg_lmse = ave_lmse
-            # if args.save_model:
-            #     state = composer.shading.state_dict()
-            #     torch.save(state, os.path.join(args.save_path, args.shad_checkpoint, 'composer_shading_state_{}.t7'.format(epoch)))
-            with open(os.path.join(args.save_path, 'LMSE.txt'), 'a+') as f:
-                f.write('epoch{}---AVG_LMSE:{}\n'.format(epoch, best_avg_lmse))
+        # if ave_lmse < best_avg_lmse:
+        #     best_avg_lmse = ave_lmse
+        #     # if args.save_model:
+        #     #     state = composer.shading.state_dict()
+        #     #     torch.save(state, os.path.join(args.save_path, args.shad_checkpoint, 'composer_shading_state_{}.t7'.format(epoch)))
+        #     with open(os.path.join(args.save_path, 'LMSE.txt'), 'a+') as f:
+        #         f.write('epoch{}---AVG_LMSE:{}\n'.format(epoch, best_avg_lmse))
         # with open(os.path.join(args.save_path, 'loss_every_epoch.txt'), 'a+') as f:
         #     f.write('epoch{} --- average_loss: {}, albedo_loss:{}, shading_loss:{}\n'.format(epoch, best_loss, cur_refl_loss, cur_shad_loss))
 

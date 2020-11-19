@@ -210,12 +210,14 @@ class SEDecomposerSingle(nn.Module):
             if self.multi_size:
                 if x.size()[-1] == self.w // 4 and x.size()[-2] == self.h // 4:
                     frame1 = self.frame1(x)
+                    frame1 = F.sigmoid(frame1)
                     if self.last_conv_ch == 1:
                         frame_list.append(frame1.repeat(1,3,1,1))
                     else:
                         frame_list.append(frame1)
                 if x.size()[-1] == self.w // 2 and x.size()[-2] == self.h // 2:
                     frame2 = self.frame2(x)
+                    frame2 = F.sigmoid(frame2)
                     if self.last_conv_ch == 1:
                         frame_list.append(frame2.repeat(1,3,1,1))
                     else:
@@ -223,6 +225,7 @@ class SEDecomposerSingle(nn.Module):
              
         x = decoder[-1](x)
         if self.last_conv_ch == 1:
+            x = F.sigmoid(x)
             x = x.repeat(1,3,1,1)
         if self.multi_size:
             if self.heapmap:

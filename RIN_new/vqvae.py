@@ -62,7 +62,7 @@ class Encoder(nn.Module):
         if use_inception:
             blocks.append(Inception(channel, channel // 4, channel // 4, channel // 4, channel // 4, channel // 4, channel // 4))
         else:
-            blocks.append(ResBlock(channel, norm_layer))
+            blocks.append(BasicConv2d(channel, channel, kernel_size=3, stride=1, padding=1))
 
         self.blocks = nn.Sequential(*blocks)
 
@@ -71,10 +71,10 @@ class Encoder(nn.Module):
 
 
 class Decoder(nn.Module):
-    def __init__(self, in_channel, out_channel, channel, norm_layer, is_last=False, use_tanh=False):
+    def __init__(self, in_channel, out_channel, channel, norm_layer, is_last=False, use_tanh=False, use_inception=True):
         super().__init__()
 
-        if is_last:
+        if is_last and use_inception:
             blocks = [Inception(in_channel, channel // 4, channel // 4, channel // 4, channel // 4, channel // 4, channel // 4)]
         else:
             blocks = [
@@ -92,6 +92,8 @@ class Decoder(nn.Module):
         else:
             if use_tanh:
                 blocks.append(nn.Tanh())
+            else:
+                blocks.append(nn.Sigmoid())
 
         self.blocks = nn.Sequential(*blocks)
 
@@ -159,12 +161,13 @@ class BasicConv2d(nn.Module):
     def forward(self, x: Tensor) -> Tensor:
         x = self.conv(x)
         x = self.bn(x)
-        return F.relu(x, inplace=True)
+        return F.leaky_relu(x, inplace=True)
 
 class VQVAE(nn.Module):
     def __init__(
         self,
         in_channel=3,
+        out_channel=3,
         channel=128,
         n_res_block=2,
         n_res_channel=32,
@@ -175,24 +178,33 @@ class VQVAE(nn.Module):
         norm_layer=None,
         init_weights=None,
         use_tanh=False,
-        use_inception=False,
+        use_inception=True,
+        use_skip=True,
+        use_multiPredict=True,
     ):
         super().__init__()
 
         if norm_layer is None:
             norm_layer = nn.BatchNorm2d
+        
+        self.use_skip = use_skip
+        self.use_multiPredict = use_multiPredict
 
         self.enc_b = Encoder(in_channel, channel, norm_layer, use_inception=use_inception)
         self.enc_m = Encoder(channel, channel, norm_layer, use_inception=use_inception)
         self.enc_t = Encoder(channel, channel, norm_layer, use_inception=use_inception)
 
-        self.res_block1 = ResBlock(channel * 2, norm_layer)
-        self.res_block2 = ResBlock(channel * 2, norm_layer)
+        if use_multiPredict:
+            self.res_block1 = ResBlock(channel * 2 if use_skip else channel, norm_layer)
+            self.res_block2 = ResBlock(channel * 2 if use_skip else channel, norm_layer)
         
         self.dec_t = Decoder(channel, channel, channel, norm_layer)
-        self.dec_m = Decoder(channel*2, channel, channel, norm_layer)
-        self.dec_b = Decoder(channel*5, in_channel, channel, norm_layer, is_last=True, use_tanh=use_tanh)
+        self.dec_m = Decoder(channel*2 if use_skip else channel, channel, channel, norm_layer)
         
+        if use_multiPredict:
+            self.dec_b = Decoder(channel*5 if use_skip else channel*3, out_channel, channel, norm_layer, is_last=True, use_tanh=use_tanh, use_inception=use_inception)
+        else:
+            self.dec_b = Decoder(channel*2, out_channel, channel, norm_layer, is_last=True, use_tanh=use_tanh, use_inception=use_inception)
         self.up = nn.Upsample(scale_factor=2)
 
         if init_weights:
@@ -217,33 +229,52 @@ class VQVAE(nn.Module):
         enc_t = self.enc_t(enc_m)
 
         dec_t = self.dec_t(enc_t)
-        cat_mt = torch.cat([enc_m, dec_t], 1)
-        cat_res_mt = self.res_block1(cat_mt)
-        
-        up1 = self.up(enc_t)
-        scale1 = torch.cat([up1, cat_res_mt], 1)
+        if self.use_skip and self.use_multiPredict:
+            cat_mt = torch.cat([enc_m, dec_t], 1)
+            cat_res_mt = self.res_block1(cat_mt)
 
-        dec_m = self.dec_m(cat_mt)
-        cat_bm = torch.cat([dec_m, enc_b], 1)
-        cat_res_bm = self.res_block2(cat_bm)
+            up1 = self.up(enc_t)
+            scale1 = torch.cat([up1, cat_res_mt], 1)
 
-        up2 = self.up(scale1)
-        scale2 = torch.cat([up2, cat_res_bm], 1)
+            dec_m = self.dec_m(cat_mt)
+            cat_bm = torch.cat([dec_m, enc_b], 1)
+            cat_res_bm = self.res_block2(cat_bm)
 
-        out = self.dec_b(scale2)
+            up2 = self.up(scale1)
+            scale2 = torch.cat([up2, cat_res_bm], 1)
+
+            out = self.dec_b(scale2)
+        elif self.use_skip:
+            cat_mt = torch.cat([enc_m, dec_t], 1)
+            dec_m = self.dec_m(cat_mt)
+            cat_bm = torch.cat([dec_m, enc_b], 1)
+            out = self.dec_b(cat_bm)
+        else:
+            cat_res_mt = self.res_block1(dec_t)
+
+            up1 = self.up(enc_t)
+            scale1 = torch.cat([up1, cat_res_mt], 1)
+
+            dec_m = self.dec_m(dec_t)
+            cat_res_bm = self.res_block2(dec_m)
+
+            up2 = self.up(scale1)
+            scale2 = torch.cat([up2, cat_res_bm], 1)
+
+            out = self.dec_b(scale2)
         return out
 
 if __name__ == "__main__":
-    vae = VQVAE(use_tanh=True)
-    t = torch.randn(2, 3, 256, 256)
+    vae = VQVAE(use_inception=False)
+    t = torch.randn(1, 3, 256, 256)
     out = vae(t)
     print(out.size())
-    vae = VQVAE(init_weights=True, use_tanh=True, use_inception=True)
-    t = torch.randn(2, 3, 256, 256)
+    vae = VQVAE(use_multiPredict=False)
+    t = torch.randn(1, 3, 256, 256)
     out = vae(t)
     print(out.size())
-    vae = VQVAE(init_weights=True, use_tanh=True)
-    t = torch.randn(2, 3, 256, 256)
+    vae = VQVAE(use_skip=False)
+    t = torch.randn(1, 3, 256, 256)
     out = vae(t)
     print(out.size())
     # for t in out:

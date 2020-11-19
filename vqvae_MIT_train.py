@@ -26,7 +26,7 @@ def main():
     cudnn.benchmark = True
     parser = argparse.ArgumentParser()
     parser.add_argument('--mode',               type=str,   default='train')
-    parser.add_argument('--save_path',          type=str,   default='logs_vqvae\\MIT_base_256x256_noRetinex_withBf_leakyrelu_BNUP\\',
+    parser.add_argument('--save_path',          type=str,   default='logs_vqvae\\MIT_base_256x256_noRetinex_withBf_ALLleakyrelu_BNUP_Sigmiod_inception_bs4_finetune\\',
     help='save path of model, visualizations, and tensorboard')
     parser.add_argument('--loader_threads',     type=float, default=8,
     help='number of parallel data-loading threads')
@@ -37,7 +37,7 @@ def main():
     parser.add_argument('--save_model',         type=bool,  default=True,
     help='whether to save model or not')
     parser.add_argument('--num_epochs',         type=int,   default=100)
-    parser.add_argument('--batch_size',         type=StrToInt,   default=8)
+    parser.add_argument('--batch_size',         type=StrToInt,   default=4)
     parser.add_argument('--checkpoint',         type=StrToBool,  default=False)
     parser.add_argument('--state_dict_refl',    type=str,   default='composer_reflectance_state.t7')
     parser.add_argument('--state_dict_shad',    type=str,    default='composer_shading_state.t7')
@@ -77,9 +77,11 @@ def main():
     parser.add_argument('--vq_flag',            type=StrToBool,  default=False)
     parser.add_argument('--image_size',         type=StrToInt,   default=256)
     parser.add_argument('--shad_out_conv',      type=StrToInt,   default=3)
-    parser.add_argument('--finetune',           type=StrToBool,  default=False)
+    parser.add_argument('--finetune',           type=StrToBool,  default=True)
     parser.add_argument('--use_tanh',           type=StrToBool,  default=False)
-    parser.add_argument('--use_inception',      type=StrToBool,  default=False)
+    parser.add_argument('--use_inception',      type=StrToBool,  default=True)
+    parser.add_argument('--use_skip',           type=StrToBool,  default=True)
+    parser.add_argument('--use_multiPredict',   type=StrToBool,  default=True)
     parser.add_argument('--init_weights',       type=StrToBool,  default=False)
     parser.add_argument('--adam_flag',          type=StrToBool,  default=False)
     args = parser.parse_args()
@@ -89,8 +91,8 @@ def main():
     check_folder(os.path.join(args.save_path, args.shad_checkpoint))
     device = torch.device(args.cuda)
     
-    reflectance = RIN.VQVAE(vq_flag=args.vq_flag, init_weights=args.init_weights, use_tanh=args.use_tanh, use_inception=args.use_inception).to(device)
-    shading = RIN.VQVAE(vq_flag=args.vq_flag, init_weights=args.init_weights, use_tanh=args.use_tanh, use_inception=args.use_inception).to(device)
+    reflectance = RIN.VQVAE(vq_flag=args.vq_flag, init_weights=args.init_weights, use_tanh=args.use_tanh, use_inception=args.use_inception, use_skip=args.use_skip, use_multiPredict=args.use_multiPredict).to(device)
+    shading = RIN.VQVAE(vq_flag=args.vq_flag, init_weights=args.init_weights, use_tanh=args.use_tanh, use_inception=args.use_inception, use_skip=args.use_skip, use_multiPredict=args.use_multiPredict).to(device)
     cur_epoch = 0
     if args.checkpoint:
         reflectance.load_state_dict(torch.load(os.path.join(args.save_path, args.refl_checkpoint, args.state_dict_refl)))
@@ -150,13 +152,13 @@ def main():
         if albedo_test_loss < best_albedo_loss:
             best_albedo_loss = albedo_test_loss
             state = composer.reflectance.state_dict()
-            torch.save(state, os.path.join(args.save_path, args.refl_checkpoint, 'composer_reflectance_state_{}.t7'.format(epoch)))
+            torch.save(state, os.path.join(args.save_path, args.refl_checkpoint, 'composer_reflectance_state.t7'))
             with open(os.path.join(args.save_path, 'reflectance_loss.txt'), 'a+') as f:
                 f.write('epoch{} --- albedo_loss:{}\n'.format(epoch, albedo_test_loss))
         if shading_test_loss < best_shading_loss:
             best_shading_loss = shading_test_loss
             state = composer.shading.state_dict()
-            torch.save(state, os.path.join(args.save_path, args.shad_checkpoint, 'composer_shading_state_{}.t7'.format(epoch)))
+            torch.save(state, os.path.join(args.save_path, args.shad_checkpoint, 'composer_shading_state.t7'))
             with open(os.path.join(args.save_path, 'shading_loss.txt'), 'a+') as f:
                 f.write('epoch{} --- shading_loss:{}\n'.format(epoch, shading_test_loss))
 

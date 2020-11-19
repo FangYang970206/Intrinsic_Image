@@ -18,14 +18,14 @@ from utils import *
 def main():
     cudnn.benchmark = True
     parser = argparse.ArgumentParser()
-    parser.add_argument('--save_path',          type=str,   default='logs_vqvae\\MIT_base_256x256_noRetinex_withBf_leakyrelu_BNUP\\',
+    parser.add_argument('--save_path',          type=str,   default='logs_vqvae\\MIT_base_256x256_noRetinex_withBf_leakyrelu_BNUP_Sigmiod_inception_bs4_finetune_woMultiPredict\\',
     help='save path of model, visualizations, and tensorboard')
     parser.add_argument('--loader_threads',     type=float, default=8,
     help='number of parallel data-loading threads')
     parser.add_argument('--refl_checkpoint',    type=str,   default='refl_checkpoint')
     parser.add_argument('--shad_checkpoint',    type=str,   default='shad_checkpoint')
-    parser.add_argument('--state_dict_refl',         type=str,   default='composer_reflectance_state_30.t7')
-    parser.add_argument('--state_dict_shad',         type=str,   default='composer_shading_state_95.t7')
+    parser.add_argument('--state_dict_refl',    type=str,   default='composer_reflectance_state.t7')
+    parser.add_argument('--state_dict_shad',    type=str,   default='composer_shading_state.t7')
     parser.add_argument('--refl_skip_se',       type=StrToBool,  default=False)
     parser.add_argument('--shad_skip_se',       type=StrToBool,  default=False)
     parser.add_argument('--refl_low_se',        type=StrToBool,  default=False)
@@ -43,11 +43,20 @@ def main():
     parser.add_argument('--dataset',            type=str,        default='mit')
     parser.add_argument('--shapenet_g',         type=StrToBool,  default=False)
     parser.add_argument('--vq_flag',            type=StrToBool,  default=False)
+    parser.add_argument('--use_tanh',           type=StrToBool,  default=False)
+    parser.add_argument('--use_inception',      type=StrToBool,  default=True)
+    parser.add_argument('--use_skip',           type=StrToBool,  default=True)
+    parser.add_argument('--use_multiPredict',   type=StrToBool,  default=False)
+    parser.add_argument('--vae',                type=StrToBool,  default=True)
     args = parser.parse_args()
 
     device = torch.device(args.cuda)
-    reflectance = RIN.VQVAE(vq_flag=args.vq_flag).to(device)
-    shading = RIN.VQVAE(vq_flag=args.vq_flag).to(device)
+    if args.vae:
+        reflectance = RIN.VQVAE(vq_flag=args.vq_flag, use_tanh=args.use_tanh, use_inception=args.use_inception, use_skip=args.use_skip, use_multiPredict=args.use_multiPredict).to(device)
+        shading = RIN.VQVAE(vq_flag=args.vq_flag, use_tanh=args.use_tanh, use_inception=args.use_inception, use_skip=args.use_skip, use_multiPredict=args.use_multiPredict).to(device)
+    else:
+        reflectance = RIN.SEDecomposerSingle(multi_size=args.refl_multi_size, low_se=args.refl_low_se, skip_se=args.refl_skip_se, detach=args.refl_detach_flag, reduction=args.refl_reduction).to(device)
+        shading = RIN.SEDecomposerSingle(multi_size=args.shad_multi_size, low_se=args.shad_low_se, skip_se=args.shad_skip_se, se_squeeze=args.shad_squeeze_flag, reduction=args.shad_reduction, detach=args.shad_detach_flag, last_conv_ch=args.shad_out_conv).to(device)
     reflectance.load_state_dict(torch.load(os.path.join(args.save_path, args.refl_checkpoint, args.state_dict_refl)))
     shading.load_state_dict(torch.load(os.path.join(args.save_path, args.shad_checkpoint, args.state_dict_shad)))
     print('load checkpoint success!')
@@ -114,6 +123,12 @@ def main():
                 albedo_fake, shading_fake = composer.forward(input_g)
             if args.fullsize:
                 albedo_fake, shading_fake = tmp_inversepad(albedo_fake), tmp_inversepad(shading_fake)
+
+            if args.use_tanh:
+                albedo_fake = (albedo_fake + 1) / 2
+                shading_fake = (shading_fake + 1) / 2
+                albedo_g = (albedo_g + 1) / 2
+                shading_g = (shading_g + 1) / 2
 
             albedo_fake  = albedo_fake * mask_g
             shading_fake = shading_fake * mask_g
