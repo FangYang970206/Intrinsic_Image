@@ -75,6 +75,7 @@ def main():
     parser.add_argument('--fullsize_test',      type=StrToBool,  default=False)
     parser.add_argument('--image_size',         type=StrToInt,   default=256)
     parser.add_argument('--ttur',               type=StrToBool,  default=False)
+    parser.add_argument('--vae',                type=StrToBool,  default=False)
     args = parser.parse_args()
 
     check_folder(args.save_path)
